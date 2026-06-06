@@ -1,10 +1,3 @@
-// ─── Information panel content ───────────────────────────────────────────────
-// EDIT THIS FILE to change what the /infopanel buttons say. No other code needs
-// touching. Each entry in `sections` becomes one button; clicking it shows that
-// section's title + description privately to the user.
-//
-// style options: 'Primary' (blurple) | 'Secondary' (grey) | 'Success' (green) | 'Danger' (red)
-
 module.exports = {
   // The main panel message everyone sees.
   panel: {
@@ -30,8 +23,7 @@ module.exports = {
         '**2.** No spam, self-promotion, or unsolicited DMs.\n' +
         '**3.** Keep channels on-topic.\n' +
         '**4.** Follow Discord\'s Terms of Service.\n' +
-        '**5.** Listen to staff.\n\n' +
-        '_(Edit this text in `src/config/info.js`.)_',
+        '**5.** Listen to staff.\n\n',
     },
     {
       id: 'info_guidelines',
@@ -40,8 +32,7 @@ module.exports = {
       style: 'Primary',
       title: '📘 Community Guidelines',
       description:
-        'Add your community/regiment guidelines here.\n\n' +
-        '_(Edit this text in `src/config/info.js`.)_',
+        'Add your community/regiment guidelines here.\n\n',
     },
     {
       id: 'info_roles',
@@ -52,8 +43,7 @@ module.exports = {
       description:
         '**Cadet** — you\'re an active member of the regiment.\n' +
         '**Recruit** — you\'re on the waiting list for a regiment slot.\n\n' +
-        '**Staff:** Premier · Commander · Lieutenant · Sergeant\n\n' +
-        '_(Edit this text in `src/config/info.js`.)_',
+        '**Staff:** Premier · Commander · Lieutenant · Sergeant\n\n',
     },
     {
       id: 'info_join',
@@ -64,8 +54,7 @@ module.exports = {
       description:
         'Head to the **#tickets** channel and click **🎖️ Join Regiment**.\n' +
         'If a slot is open you\'ll get the **Cadet** role instantly. If we\'re full, ' +
-        'you\'ll be added to the queue as a **Recruit** and promoted automatically when a slot opens.\n\n' +
-        '_(Edit this text in `src/config/info.js`.)_',
+        'you\'ll be added to the queue as a **Recruit** and promoted automatically when a slot opens.\n\n',
     },
     {
       id: 'info_contact',
@@ -74,8 +63,7 @@ module.exports = {
       style: 'Secondary',
       title: '📨 Contact Staff',
       description:
-        'Need help? Open a ticket or mention a staff member.\n\n' +
-        '_(Edit this text in `src/config/info.js`.)_',
+        'Need help? Open a ticket or mention a staff member.\n\n',
     },
   ],
 };
