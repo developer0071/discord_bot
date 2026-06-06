@@ -14,6 +14,7 @@ const guildMemberRemove = require('./events/guildMemberRemove');
 const messageCreate     = require('./events/messageCreate');
 const { handleButton }  = require('./events/buttons');
 const verification      = require('./events/verification');
+const { startWebServer } = require('./web/server');
 const commands          = require('./commands/index');
 
 // ─── Client Setup ─────────────────────────────────────────────────────────────
@@ -38,6 +39,7 @@ client.once('clientReady', async () => {
   console.log(`\n✅ Logged in as ${client.user.tag}`);
   console.log(`📡 Serving ${client.guilds.cache.size} guild(s)\n`);
   await registerSlashCommands();
+  startWebServer(client);
 });
 
 client.on('guildMemberAdd',    member => guildMemberAdd.execute(member));

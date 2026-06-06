@@ -209,6 +209,14 @@ async function getUserProfile(userId) {
   return doc.exists ? doc.data() : null;
 }
 
+/**
+ * Get all saved user profiles.
+ */
+async function getAllUsers() {
+  const snapshot = await db.collection('users').get();
+  return snapshot.docs.map((doc) => doc.data());
+}
+
 // ─── Polls (time votes) ───────────────────────────────────────────────────────
 
 /**
@@ -247,4 +255,5 @@ module.exports = {
   getVotes,
   saveUserProfile,
   getUserProfile,
+  getAllUsers,
 };
