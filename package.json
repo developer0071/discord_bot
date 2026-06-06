@@ -1,0 +1,15 @@
+{
+  "name": "discord-regiment-bot",
+  "version": "1.0.0",
+  "description": "Discord bot with regiment queue system using Firebase",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.15.3",
+    "firebase-admin": "^12.3.0",
+    "dotenv": "^16.4.5"
+  }
+}
