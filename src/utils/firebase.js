@@ -192,6 +192,23 @@ async function getAllMembers() {
   return snapshot.docs.map((doc) => doc.data());
 }
 
+// ─── User profiles (verification info) ─────────────────────────────────────────
+
+/**
+ * Save/merge a user's profile (Discord info, Roblox username, families, etc.).
+ */
+async function saveUserProfile(userId, data) {
+  await db.collection('users').doc(userId).set(data, { merge: true });
+}
+
+/**
+ * Get a user's saved profile, or null.
+ */
+async function getUserProfile(userId) {
+  const doc = await db.collection('users').doc(userId).get();
+  return doc.exists ? doc.data() : null;
+}
+
 // ─── Polls (time votes) ───────────────────────────────────────────────────────
 
 /**
@@ -228,4 +245,6 @@ module.exports = {
   getAllMembers,
   setVote,
   getVotes,
+  saveUserProfile,
+  getUserProfile,
 };

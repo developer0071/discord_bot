@@ -2,6 +2,7 @@ const { MessageFlags, EmbedBuilder } = require('discord.js');
 
 const info = require('../config/info');
 const timevote = require('../utils/timevote');
+const verification = require('./verification');
 
 const {
   getRegimentStatus,
@@ -92,32 +93,6 @@ async function handleLeaveQueue(interaction) {
   return interaction.editReply({ embeds: [successEmbed('You have been removed from the queue.')] });
 }
 
-// ─── Verify ───────────────────────────────────────────────────────────────────
-async function handleVerify(interaction) {
-  const roleId = process.env.VERIFIED_ROLE_ID;
-  if (!roleId) {
-    return interaction.reply({ embeds: [errorEmbed('Verification role is not configured. Ask an admin to set VERIFIED_ROLE_ID.')], flags: MessageFlags.Ephemeral });
-  }
-  const role = interaction.guild.roles.cache.get(roleId);
-  if (!role) {
-    return interaction.reply({ embeds: [errorEmbed('The verification role no longer exists. Ask an admin to fix it.')], flags: MessageFlags.Ephemeral });
-  }
-  // Already verified if they hold the access role (Recruit) or are a regiment member (Cadet).
-  if (interaction.member.roles.cache.has(roleId) || hasRegimentRole(interaction.member)) {
-    return interaction.reply({ embeds: [successEmbed("You're already verified! ✅")], flags: MessageFlags.Ephemeral });
-  }
-  try {
-    await interaction.member.roles.add(role);
-  } catch (err) {
-    console.error('[button:verify] role add failed:', err.message);
-    return interaction.reply({ embeds: [errorEmbed("I couldn't give you the role — an admin needs to check my permissions.")], flags: MessageFlags.Ephemeral });
-  }
-  return interaction.reply({
-    embeds: [successEmbed('✅ You are now **verified** — welcome! You can see the rest of the server now.')],
-    flags: MessageFlags.Ephemeral,
-  });
-}
-
 // ─── Time vote ──────────────────────────────────────────────────────────────
 async function handleTimeVote(interaction) {
   const option = interaction.customId.slice('tvote_'.length); // e.g. 'A'
@@ -163,9 +138,9 @@ async function handleButton(interaction) {
     return handler(interaction);
   }
 
-  // ── Verify button (single role add → reply directly) ──
+  // ── Verify button → opens the verification modal (must not defer first) ──
   if (interaction.customId === 'verify_member') {
-    return handleVerify(interaction);
+    return verification.showVerifyModal(interaction);
   }
 
   // ── Info-panel buttons (static text → reply instantly) ──
