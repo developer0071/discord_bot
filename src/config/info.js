@@ -63,7 +63,7 @@ module.exports = {
       style: 'Secondary',
       title: '📨 Contact Staff',
       description:
-        'Need help? Open a ticket or mention a staff member.\n\n',
+        'Contact with us : \n Hunterstar(Premier) :  hunters1ar \n Ubel(commander) : mikufannd3v \n',
     },
   ],
 };
