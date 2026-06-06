@@ -1,6 +1,7 @@
 const { MessageFlags, EmbedBuilder } = require('discord.js');
 
 const info = require('../config/info');
+const timevote = require('../utils/timevote');
 
 const {
   getRegimentStatus,
@@ -11,6 +12,8 @@ const {
   addMember,
   isMember,
   isInQueue,
+  setVote,
+  getVotes,
 } = require('../utils/firebase');
 
 const {
@@ -115,6 +118,26 @@ async function handleVerify(interaction) {
   });
 }
 
+// ─── Time vote ──────────────────────────────────────────────────────────────
+async function handleTimeVote(interaction) {
+  const option = interaction.customId.slice('tvote_'.length); // e.g. 'A'
+  const pollId = interaction.message.id;
+
+  await setVote(pollId, interaction.user.id, option);
+  const counts = timevote.tally(await getVotes(pollId));
+
+  try {
+    await interaction.message.edit({
+      content: timevote.buildContent(counts),
+      components: timevote.buildButtons(),
+    });
+  } catch (err) {
+    console.error('[timevote] message edit failed:', err.message);
+  }
+
+  return interaction.editReply({ embeds: [successEmbed(`Your vote for **${option}** has been recorded. ✅`)] });
+}
+
 // ─── Router ─────────────────────────────────────────────────────────────────
 const handlers = {
   regiment_join: handleJoin,
@@ -127,6 +150,12 @@ const handlers = {
 const infoSections = Object.fromEntries(info.sections.map((s) => [s.id, s]));
 
 async function handleButton(interaction) {
+  // ── Time-vote buttons (Firestore + message edit → defer first) ──
+  if (interaction.customId.startsWith('tvote_')) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    return handleTimeVote(interaction);
+  }
+
   // ── Regiment action buttons (need Firestore work → defer first) ──
   const handler = handlers[interaction.customId];
   if (handler) {

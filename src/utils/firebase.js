@@ -192,6 +192,26 @@ async function getAllMembers() {
   return snapshot.docs.map((doc) => doc.data());
 }
 
+// ─── Polls (time votes) ───────────────────────────────────────────────────────
+
+/**
+ * Record (or change) a user's vote for a poll. One vote per user.
+ */
+async function setVote(pollId, userId, option) {
+  await db.collection('polls').doc(pollId).set(
+    { votes: { [userId]: option } },
+    { merge: true }
+  );
+}
+
+/**
+ * Get all votes for a poll as { userId: option }.
+ */
+async function getVotes(pollId) {
+  const doc = await db.collection('polls').doc(pollId).get();
+  return doc.exists ? (doc.data().votes || {}) : {};
+}
+
 module.exports = {
   getRegimentStatus,
   updateRegimentCount,
@@ -206,4 +226,6 @@ module.exports = {
   removeMember,
   isMember,
   getAllMembers,
+  setVote,
+  getVotes,
 };

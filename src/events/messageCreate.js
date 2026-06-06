@@ -1,5 +1,17 @@
 const { EmbedBuilder } = require('discord.js');
 const vip = require('../config/vipServers');
+const funny = require('../config/funny');
+
+// Build a whole-word, case-insensitive regex from a list of trigger phrases.
+// A space in a phrase also matches a hyphen or nothing.
+function buildTriggerPattern(triggers) {
+  return new RegExp(
+    '\\b(' + triggers
+      .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '[\\s-]?'))
+      .join('|') + ')\\b',
+    'i'
+  );
+}
 
 // ─── Regiment join detection ─────────────────────────────────────────────────
 // Fires when a message mentions the regiment. Word boundaries keep it from
@@ -11,14 +23,7 @@ function mentionsRegiment(content) {
 }
 
 // ─── VIP / private-server detection ──────────────────────────────────────────
-// Built from the configured trigger words. A space in a trigger also matches a
-// hyphen or nothing (so 'vip server' matches "vip-server" / "vipserver").
-const VIP_PATTERN = new RegExp(
-  '\\b(' + vip.triggers
-    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '[\\s-]?'))
-    .join('|') + ')\\b',
-  'i'
-);
+const VIP_PATTERN = buildTriggerPattern(vip.triggers);
 
 function matchesVipRequest(content) {
   return VIP_PATTERN.test(content);
@@ -31,10 +36,27 @@ function vipEmbed() {
   return new EmbedBuilder().setColor(vip.color || 0x9b59b6).setTitle(vip.title).setDescription(lines);
 }
 
+// ─── Fun-fact detection (random fact each time) ──────────────────────────────
+const FUNNY_PATTERN = buildTriggerPattern(funny.triggers);
+
+function matchesFunny(content) {
+  return FUNNY_PATTERN.test(content);
+}
+
+function funnyEmbed() {
+  const facts = funny.facts || [];
+  const fact = facts.length
+    ? facts[Math.floor(Math.random() * facts.length)]
+    : 'No facts set yet.';
+  const desc = (funny.intro ? funny.intro + '\n\n' : '') + `• ${fact}`;
+  return new EmbedBuilder().setColor(funny.color || 0x9b59b6).setTitle(funny.title).setDescription(desc);
+}
+
 // ─── Per-user cooldowns ──────────────────────────────────────────────────────
 const COOLDOWN_MS = 60 * 1000;
 const regimentCooldown = new Map();
 const vipCooldown = new Map();
+const funnyCooldown = new Map();
 
 function onCooldown(map, userId) {
   const now = Date.now();
@@ -50,9 +72,10 @@ module.exports = {
     // Ignore bots/webhooks and DMs.
     if (message.author.bot || !message.guild) return;
 
-    // Only listen in the configured chatting channel.
-    const channelId = process.env.CHATTING;
-    if (!channelId || message.channel.id !== channelId) return;
+    // Only listen in the configured chatting channel(s). CHATTING may be a single
+    // ID or a comma-separated list of IDs.
+    const channelIds = (process.env.CHATTING || '').split(',').map((s) => s.trim()).filter(Boolean);
+    if (!channelIds.includes(message.channel.id)) return;
 
     const content = message.content;
 
@@ -64,6 +87,18 @@ module.exports = {
         console.log(`[VIP] Sent server codes to ${message.author.tag}`);
       } catch (err) {
         console.error('[messageCreate] VIP reply failed:', err);
+      }
+      return;
+    }
+
+    // ── Fun facts (random each time) ──
+    if (matchesFunny(content)) {
+      if (onCooldown(funnyCooldown, message.author.id)) return;
+      try {
+        await message.reply({ embeds: [funnyEmbed()] });
+        console.log(`[FUNNY] Sent a fact to ${message.author.tag}`);
+      } catch (err) {
+        console.error('[messageCreate] Funny reply failed:', err);
       }
       return;
     }
@@ -88,4 +123,5 @@ module.exports = {
   // Exported for testing.
   mentionsRegiment,
   matchesVipRequest,
+  matchesFunny,
 };

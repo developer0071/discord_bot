@@ -34,6 +34,7 @@ const {
 const { canManage, canAdd } = require('../utils/permissions');
 const { promoteFromQueue } = require('../events/guildMemberRemove');
 const info = require('../config/info');
+const timevote = require('../utils/timevote');
 
 // Reply used when a member lacks permission for a command.
 function deny(interaction) {
@@ -342,6 +343,27 @@ const infoPanelCommand = {
   },
 };
 
+// ─── /timevote — MANAGE ─────────────────────────────────────────────────────────
+const timeVoteCommand = {
+  data: new SlashCommandBuilder()
+    .setName('timevote')
+    .setDescription("Post a UTC time vote that auto-converts to each member's local time")
+    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
+
+  async execute(interaction) {
+    if (!canManage(interaction.member)) return deny(interaction);
+
+    await interaction.channel.send({
+      content: timevote.buildContent(),
+      components: timevote.buildButtons(),
+    });
+    await interaction.reply({
+      embeds: [successEmbed('Time vote posted — members can click a letter to vote.')],
+      flags: MessageFlags.Ephemeral,
+    });
+  },
+};
+
 // ─── /setupverify — MANAGE ──────────────────────────────────────────────────────
 const setupVerifyCommand = {
   data: new SlashCommandBuilder()
@@ -389,4 +411,5 @@ module.exports = [
   setupPanelCommand,
   infoPanelCommand,
   setupVerifyCommand,
+  timeVoteCommand,
 ];
