@@ -1,4 +1,6 @@
-const { MessageFlags } = require('discord.js');
+const { MessageFlags, EmbedBuilder } = require('discord.js');
+
+const info = require('../config/info');
 
 const {
   getRegimentStatus,
@@ -23,19 +25,17 @@ const {
   notifyAdmins,
 } = require('../utils/helpers');
 
-const EPHEMERAL = { flags: MessageFlags.Ephemeral };
-
 // ─── Join Regiment ──────────────────────────────────────────────────────────
 async function handleJoin(interaction) {
   const member = interaction.member;
 
   if ((await isMember(member.id)) || hasRegimentRole(member)) {
-    return interaction.reply({ embeds: [errorEmbed("You're already in the regiment! 🎖️")], ...EPHEMERAL });
+    return interaction.editReply({ embeds: [errorEmbed("You're already in the regiment! 🎖️")] });
   }
 
   if (await isInQueue(member.id)) {
     const position = await getQueuePosition(member.id);
-    return interaction.reply({ embeds: [errorEmbed(`You're already in the queue at position **#${position}**.`)], ...EPHEMERAL });
+    return interaction.editReply({ embeds: [errorEmbed(`You're already in the queue at position **#${position}**.`)] });
   }
 
   const status = await getRegimentStatus();
@@ -46,49 +46,73 @@ async function handleJoin(interaction) {
       await assignRegimentRole(member);
     } catch (err) {
       console.error('[button:join] role assign failed:', err.message);
-      return interaction.reply({
+      return interaction.editReply({
         embeds: [errorEmbed("I couldn't assign the regiment role — an admin needs to check my **Manage Roles** permission and role position.")],
-        ...EPHEMERAL,
       });
     }
     await addMember(member.id, member.user.tag);
     await notifyAdmins(interaction.guild, adminNotifyEmbed(member, 'joined'));
-    return interaction.reply({ embeds: [welcomeEmbed(member)], ...EPHEMERAL });
+    return interaction.editReply({ embeds: [welcomeEmbed(member)] });
   }
 
   // Regiment full → add to the queue and mark them as a Recruit.
   const { position } = await addToQueue(member.id, member.user.tag);
   await assignRecruitRole(member).catch(err =>
     console.error('[button:join] failed to assign Recruit role:', err.message));
-  return interaction.reply({ embeds: [welcomeEmbed(member, position)], ...EPHEMERAL });
+  return interaction.editReply({ embeds: [welcomeEmbed(member, position)] });
 }
 
 // ─── View Queue ─────────────────────────────────────────────────────────────
 async function handleViewQueue(interaction) {
   const [queue, status] = await Promise.all([getFullQueue(), getRegimentStatus()]);
-  return interaction.reply({ embeds: [queueStatusEmbed(queue, status)], ...EPHEMERAL });
+  return interaction.editReply({ embeds: [queueStatusEmbed(queue, status)] });
 }
 
 // ─── My Position ────────────────────────────────────────────────────────────
 async function handleMyPosition(interaction) {
   const position = await getQueuePosition(interaction.user.id);
   if (position === null) {
-    return interaction.reply({ embeds: [errorEmbed("You're not currently in the queue.")], ...EPHEMERAL });
+    return interaction.editReply({ embeds: [errorEmbed("You're not currently in the queue.")] });
   }
   const status = await getRegimentStatus();
-  return interaction.reply({
+  return interaction.editReply({
     embeds: [successEmbed(`You're at position **#${position}** in the queue. Slots: ${status.currentCount}/${status.maxSlots}.`)],
-    ...EPHEMERAL,
   });
 }
 
 // ─── Leave Queue ────────────────────────────────────────────────────────────
 async function handleLeaveQueue(interaction) {
   if (!(await isInQueue(interaction.user.id))) {
-    return interaction.reply({ embeds: [errorEmbed("You're not in the queue.")], ...EPHEMERAL });
+    return interaction.editReply({ embeds: [errorEmbed("You're not in the queue.")] });
   }
   await removeFromQueue(interaction.user.id);
-  return interaction.reply({ embeds: [successEmbed('You have been removed from the queue.')], ...EPHEMERAL });
+  return interaction.editReply({ embeds: [successEmbed('You have been removed from the queue.')] });
+}
+
+// ─── Verify ───────────────────────────────────────────────────────────────────
+async function handleVerify(interaction) {
+  const roleId = process.env.VERIFIED_ROLE_ID;
+  if (!roleId) {
+    return interaction.reply({ embeds: [errorEmbed('Verification role is not configured. Ask an admin to set VERIFIED_ROLE_ID.')], flags: MessageFlags.Ephemeral });
+  }
+  const role = interaction.guild.roles.cache.get(roleId);
+  if (!role) {
+    return interaction.reply({ embeds: [errorEmbed('The verification role no longer exists. Ask an admin to fix it.')], flags: MessageFlags.Ephemeral });
+  }
+  // Already verified if they hold the access role (Recruit) or are a regiment member (Cadet).
+  if (interaction.member.roles.cache.has(roleId) || hasRegimentRole(interaction.member)) {
+    return interaction.reply({ embeds: [successEmbed("You're already verified! ✅")], flags: MessageFlags.Ephemeral });
+  }
+  try {
+    await interaction.member.roles.add(role);
+  } catch (err) {
+    console.error('[button:verify] role add failed:', err.message);
+    return interaction.reply({ embeds: [errorEmbed("I couldn't give you the role — an admin needs to check my permissions.")], flags: MessageFlags.Ephemeral });
+  }
+  return interaction.reply({
+    embeds: [successEmbed('✅ You are now **verified** — welcome! You can see the rest of the server now.')],
+    flags: MessageFlags.Ephemeral,
+  });
 }
 
 // ─── Router ─────────────────────────────────────────────────────────────────
@@ -99,10 +123,33 @@ const handlers = {
   regiment_leavequeue: handleLeaveQueue,
 };
 
+// Info-panel sections keyed by their button id.
+const infoSections = Object.fromEntries(info.sections.map((s) => [s.id, s]));
+
 async function handleButton(interaction) {
+  // ── Regiment action buttons (need Firestore work → defer first) ──
   const handler = handlers[interaction.customId];
-  if (!handler) return;
-  await handler(interaction);
+  if (handler) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    return handler(interaction);
+  }
+
+  // ── Verify button (single role add → reply directly) ──
+  if (interaction.customId === 'verify_member') {
+    return handleVerify(interaction);
+  }
+
+  // ── Info-panel buttons (static text → reply instantly) ──
+  const section = infoSections[interaction.customId];
+  if (section) {
+    return interaction.reply({
+      embeds: [new EmbedBuilder()
+        .setColor(section.color || info.panel.color)
+        .setTitle(section.title)
+        .setDescription(section.description)],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
 }
 
 module.exports = { handleButton };

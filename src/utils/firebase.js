@@ -184,6 +184,14 @@ async function isMember(userId) {
   return doc.exists;
 }
 
+/**
+ * Get all regiment members, ordered by join time.
+ */
+async function getAllMembers() {
+  const snapshot = await db.collection('members').orderBy('joinedAt').get();
+  return snapshot.docs.map((doc) => doc.data());
+}
+
 module.exports = {
   getRegimentStatus,
   updateRegimentCount,
@@ -197,4 +205,5 @@ module.exports = {
   addMember,
   removeMember,
   isMember,
+  getAllMembers,
 };
