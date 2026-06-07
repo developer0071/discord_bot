@@ -38,8 +38,18 @@ async function showVerifyModal(interaction) {
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
     .setMaxLength(50);
+  const suggestion = new TextInputBuilder()
+    .setCustomId('suggestion')
+    .setLabel('What would you like to see in the server?')
+    .setPlaceholder('Optional — events, channels, giveaways…')
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(false)
+    .setMaxLength(300);
 
-  modal.addComponents(new ActionRowBuilder().addComponents(roblox));
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(roblox),
+    new ActionRowBuilder().addComponents(suggestion),
+  );
   await interaction.showModal(modal);
 }
 
@@ -47,12 +57,14 @@ async function showVerifyModal(interaction) {
 async function handleVerifyModal(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const roblox = interaction.fields.getTextInputValue('roblox_username').trim();
+  const suggestion = interaction.fields.getTextInputValue('suggestion').trim();
 
   await saveUserProfile(interaction.user.id, {
     discordId: interaction.user.id,
     discordTag: interaction.user.tag,
     discordUsername: interaction.user.username,
     robloxUsername: roblox,
+    feedback: suggestion,
     verifiedAt: Date.now(),
   });
 

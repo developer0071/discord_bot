@@ -217,6 +217,39 @@ async function getAllUsers() {
   return snapshot.docs.map((doc) => doc.data());
 }
 
+// ─── Audit logs ────────────────────────────────────────────────────────────────
+
+/**
+ * Append an audit-log entry.
+ */
+async function addLog(action, target, detail) {
+  await db.collection('logs').add({
+    action,
+    target: target || 'Unknown',
+    detail: detail || '',
+    at: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+/**
+ * Get the most recent audit-log entries (newest first).
+ */
+async function getLogs(max = 50) {
+  const snapshot = await db.collection('logs').orderBy('at', 'desc').limit(max).get();
+  return snapshot.docs.map((doc) => doc.data());
+}
+
+// ─── Dashboard settings ─────────────────────────────────────────────────────────
+
+async function getDashboardSettings() {
+  const doc = await db.collection('config').doc('dashboard').get();
+  return doc.exists ? doc.data() : {};
+}
+
+async function saveDashboardSettings(data) {
+  await db.collection('config').doc('dashboard').set(data, { merge: true });
+}
+
 // ─── Polls (time votes) ───────────────────────────────────────────────────────
 
 /**
@@ -256,4 +289,8 @@ module.exports = {
   saveUserProfile,
   getUserProfile,
   getAllUsers,
+  addLog,
+  getLogs,
+  getDashboardSettings,
+  saveDashboardSettings,
 };

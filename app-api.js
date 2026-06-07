@@ -62,12 +62,54 @@
         requestedAt: new Date(q.joinedAt || Date.now()), discordId: q.userId,
       }));
 
+    // Audit log (real entries from Firestore)
+    if (typeof logs !== 'undefined') {
+      logs.length = 0;
+      (data.logs || []).forEach((l) => logs.push({
+        action: l.action, target: l.target, detail: l.detail, by: 'dashboard',
+        at: new Date(l.at || Date.now()),
+      }));
+    }
+
+    // Feedback (collected at verification)
+    if (typeof feedbacks !== 'undefined') {
+      feedbacks.length = 0;
+      (data.feedback || []).forEach((f, i) => feedbacks.push({
+        id: i + 1, author: f.author, text: f.text, category: 'general',
+        date: new Date(f.date || Date.now()),
+      }));
+    }
+
+    // Settings fields
+    const s = data.settings || {};
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+    setVal('settingName', s.name || (data.status && 'Moonlight Soldiers'));
+    setVal('settingMaxSize', data.status ? data.status.maxSlots : '');
+    if (s.autoAccept) setVal('settingAutoAccept', s.autoAccept);
+    if (s.kickReason) setVal('settingKickReason', s.kickReason);
+
     if (typeof renderMembers === 'function') renderMembers();
     if (typeof updateCounts === 'function') updateCounts();
-    const qt = document.getElementById('tab-queue');
-    if (qt && qt.classList.contains('active') && typeof renderQueue === 'function') renderQueue();
+    const active = (tab) => { const el = document.getElementById('tab-' + tab); return el && el.classList.contains('active'); };
+    if (active('queue') && typeof renderQueue === 'function') renderQueue();
+    if (active('logs') && typeof renderLogs === 'function') renderLogs();
+    if (active('feedback') && typeof renderFeedback === 'function') renderFeedback();
   }
   window.loadData = loadData;
+
+  window.saveSettings = async function () {
+    const val = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+    try {
+      await api('POST', '/api/settings', {
+        name: val('settingName'),
+        maxSize: val('settingMaxSize'),
+        autoAccept: val('settingAutoAccept'),
+        kickReason: val('settingKickReason'),
+      });
+      showToast('Settings saved', 'success');
+    } catch (e) { showToast('Save failed: ' + e.message, 'error'); return; }
+    await loadData();
+  };
 
   // ── Action overrides (call the API, then reload live data) ──
   window.confirmKick = async function () {

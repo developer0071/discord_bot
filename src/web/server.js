@@ -57,15 +57,20 @@ function startWebServer(client) {
     next();
   });
 
+  // Write an audit-log entry (best-effort, never blocks an action).
+  const log = (action, target, detail) => fb.addLog(action, target, detail).catch(() => {});
+
   // ── Data ──
   app.get('/api/data', async (req, res) => {
     try {
-      const [status, members, queue, users] = await Promise.all([
-        fb.getRegimentStatus(), fb.getAllMembers(), fb.getFullQueue(), fb.getAllUsers(),
+      const [status, members, queue, users, logs, settings] = await Promise.all([
+        fb.getRegimentStatus(), fb.getAllMembers(), fb.getFullQueue(),
+        fb.getAllUsers(), fb.getLogs(50), fb.getDashboardSettings(),
       ]);
       const profile = Object.fromEntries(users.map((u) => [u.discordId || u.userId, u]));
       res.json({
         status,
+        settings,
         members: members.map((m) => ({
           userId: m.userId,
           discord: m.username,
@@ -81,6 +86,10 @@ function startWebServer(client) {
           families: profile[q.userId]?.families || [],
           joinedAt: tsToMs(q.joinedAt),
         })),
+        logs: logs.map((l) => ({ action: l.action, target: l.target, detail: l.detail, at: tsToMs(l.at) })),
+        feedback: users
+          .filter((u) => u.feedback)
+          .map((u) => ({ author: u.discordTag || u.discordId, text: u.feedback, date: tsToMs(u.verifiedAt) || Date.now() })),
       });
     } catch (e) {
       console.error('[web] /api/data:', e);
@@ -97,6 +106,7 @@ function startWebServer(client) {
       await assignRegimentRole(member);
       await fb.removeFromQueue(userId);
       await fb.addMember(userId, member.user.tag);
+      log('QUEUE_ACCEPTED', member.user.tag, 'Accepted from queue');
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
@@ -104,7 +114,9 @@ function startWebServer(client) {
   // ── Reject (remove) a user from the queue ──
   app.post('/api/reject', async (req, res) => {
     try {
+      const member = await fetchMember(req.body.userId);
       await fb.removeFromQueue(req.body.userId);
+      log('QUEUE_REJECTED', member?.user.tag || req.body.userId, 'Removed from queue');
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
@@ -116,6 +128,7 @@ function startWebServer(client) {
       const member = await fetchMember(userId);
       if (member) await removeRegimentRole(member).catch(() => {});
       await fb.removeMember(userId);
+      log('MEMBER_KICKED', member?.user.tag || userId, 'Removed from regiment');
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
@@ -139,6 +152,7 @@ function startWebServer(client) {
       if (await fb.isInQueue(member.id)) await fb.removeFromQueue(member.id);
       if (!(await fb.isMember(member.id))) await fb.addMember(member.id, member.user.tag);
       if (roblox) await fb.saveUserProfile(member.id, { discordId: member.id, discordTag: member.user.tag, robloxUsername: roblox });
+      log('MEMBER_ADDED', member.user.tag, 'Added to regiment');
       res.json({ ok: true, tag: member.user.tag });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
@@ -157,6 +171,7 @@ function startWebServer(client) {
   app.post('/api/promote', async (req, res) => {
     try {
       await promoteFromQueue(guild());
+      log('QUEUE_ACCEPTED', 'Next in queue', 'Promoted next from queue');
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
@@ -166,10 +181,34 @@ function startWebServer(client) {
     try {
       const newMax = parseInt(req.body.slots, 10);
       if (!Number.isInteger(newMax) || newMax < 0) return res.status(400).json({ error: 'invalid slots' });
+      await fb.getRegimentStatus(); // ensure config doc exists
       await fb.setMaxSlots(newMax);
       const status = await fb.getRegimentStatus();
       const toFill = newMax - status.currentCount;
       for (let i = 0; i < toFill; i++) await promoteFromQueue(guild());
+      log('SETTINGS_CHANGED', 'System', `Max slots set to ${newMax}`);
+      res.json({ ok: true });
+    } catch (e) { res.status(400).json({ error: e.message }); }
+  });
+
+  // ── Save dashboard settings (max size + cosmetic prefs) ──
+  app.post('/api/settings', async (req, res) => {
+    try {
+      const { name, maxSize, autoAccept, kickReason } = req.body;
+      const max = parseInt(maxSize, 10);
+      if (Number.isInteger(max) && max >= 0) {
+        await fb.getRegimentStatus();
+        await fb.setMaxSlots(max);
+        const status = await fb.getRegimentStatus();
+        const toFill = max - status.currentCount;
+        for (let i = 0; i < toFill; i++) await promoteFromQueue(guild());
+      }
+      await fb.saveDashboardSettings({
+        name: name || '',
+        autoAccept: autoAccept || '',
+        kickReason: kickReason || '',
+      });
+      log('SETTINGS_CHANGED', 'System', 'Dashboard settings updated');
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
