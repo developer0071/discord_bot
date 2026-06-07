@@ -5,14 +5,15 @@
 // the global `members`/`queue` arrays and override the action functions.
 
 (function () {
-  // Backend base URL. Empty = same origin (when served by the bot directly).
-  // On Vercel, set it to your bot's HTTPS API URL (e.g. a Cloudflare Tunnel URL).
+  // Backend API URL (the bot's Express server, exposed over HTTPS).
+  // The frontend on Vercel calls this automatically — no prompt needed.
+  // ⚠️ If your Cloudflare tunnel URL changes (it does on restart unless it's a
+  // named tunnel), update this one line and redeploy. A localStorage override
+  // via setBackend('https://...') also works without redeploying.
+  const DEFAULT_API_BASE = 'https://component-yen-historical-socket.trycloudflare.com';
+
   function getApiBase() {
-    if (localStorage.getItem('dash_api') === null) {
-      const b = (prompt('Backend API URL (leave blank if served by the bot):') || '').trim().replace(/\/+$/, '');
-      localStorage.setItem('dash_api', b);
-    }
-    return localStorage.getItem('dash_api');
+    return (localStorage.getItem('dash_api') || DEFAULT_API_BASE).replace(/\/+$/, '');
   }
 
   function getPw() {

@@ -47,6 +47,7 @@ function startWebServer(client) {
   // ── Public: the dashboard UI (login happens client-side; data needs auth) ──
   app.get('/', (req, res) => res.sendFile(path.join(rootDir, 'index.html')));
   app.get('/app-api.js', (req, res) => res.sendFile(path.join(rootDir, 'app-api.js')));
+  app.get('/logo.png', (req, res) => res.sendFile(path.join(rootDir, 'logo.png')));
 
   // ── Auth gate for everything under /api ──
   app.use('/api', (req, res, next) => {

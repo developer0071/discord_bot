@@ -4,23 +4,24 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Moonlight Soldiers — Command Center</title>
+<link rel="icon" type="image/png" href="/logo.png">
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <style>
   :root {
-    --bg-deep: #0a0e14;
-    --bg-base: #0f1419;
-    --bg-surface: #151b23;
-    --bg-card: #1a222c;
-    --bg-elevated: #202a36;
-    --border: #2a3544;
-    --border-light: #344155;
-    --text-primary: #e8edf4;
-    --text-secondary: #8b9bb4;
-    --text-muted: #5a6a80;
-    --accent: #00e5c7;
-    --accent-dim: rgba(0,229,199,0.12);
-    --accent-glow: rgba(0,229,199,0.25);
+    --bg-deep: #0a0708;
+    --bg-base: #0f0b0c;
+    --bg-surface: #161011;
+    --bg-card: #1c1515;
+    --bg-elevated: #241a1b;
+    --border: #34262a;
+    --border-light: #46343a;
+    --text-primary: #f1e9ea;
+    --text-secondary: #b29aa0;
+    --text-muted: #7c666a;
+    --accent: #e0303c;
+    --accent-dim: rgba(224,48,60,0.12);
+    --accent-glow: rgba(224,48,60,0.28);
     --danger: #ff4757;
     --danger-dim: rgba(255,71,87,0.12);
     --warning: #ffa502;
@@ -48,7 +49,7 @@
     position: fixed;
     top: -30%; left: -10%;
     width: 500px; height: 500px;
-    background: radial-gradient(circle, rgba(0,229,199,0.04) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(224,48,60,0.06) 0%, transparent 70%);
     pointer-events: none;
     z-index: 0;
   }
@@ -57,7 +58,7 @@
     position: fixed;
     bottom: -20%; right: -10%;
     width: 600px; height: 600px;
-    background: radial-gradient(circle, rgba(168,85,247,0.03) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(139,0,0,0.05) 0%, transparent 70%);
     pointer-events: none;
     z-index: 0;
   }
@@ -100,8 +101,9 @@
 
   .brand-icon {
     width: 40px; height: 40px;
-    background: linear-gradient(135deg, var(--accent), #00b89c);
+    background: linear-gradient(135deg, var(--accent), #8b0000);
     border-radius: 10px;
+    overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -307,7 +309,7 @@
     border-color: var(--accent);
   }
   .btn-primary:hover {
-    background: #00ccb3;
+    background: var(--accent);
     box-shadow: 0 4px 20px var(--accent-glow);
     transform: translateY(-1px);
   }
@@ -893,7 +895,7 @@
   .bulk-bar {
     padding: 10px 16px;
     background: var(--accent-dim);
-    border-bottom: 1px solid rgba(0,229,199,0.2);
+    border-bottom: 1px solid rgba(224,48,60,0.2);
     display: none;
     align-items: center;
     gap: 12px;
@@ -910,7 +912,7 @@
   <!-- Sidebar -->
   <aside class="sidebar">
     <div class="sidebar-brand">
-      <div class="brand-icon"><i class="fas fa-moon"></i></div>
+      <div class="brand-icon"><img src="/logo.png" alt="Moonlight Soldiers" style="width:100%;height:100%;object-fit:cover"></div>
       <div class="brand-text">
         <h2>Moonlight Soldiers</h2>
         <span>Command Center</span>
@@ -1179,7 +1181,7 @@
 // 数据层 —— 模拟真实数据集
 // ============================================================
 const AVATAR_COLORS = [
-  'linear-gradient(135deg,#00e5c7,#00b89c)',
+  'linear-gradient(135deg,#e0303c,#8b0000)',
   'linear-gradient(135deg,#a855f7,#6366f1)',
   'linear-gradient(135deg,#f43f5e,#e11d48)',
   'linear-gradient(135deg,#f59e0b,#d97706)',
