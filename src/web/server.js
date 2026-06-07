@@ -17,11 +17,6 @@ function tsToMs(ts) {
  * (assign/remove roles) can run against the guild.
  */
 function startWebServer(client) {
-  const password = process.env.DASHBOARD_PASSWORD;
-  if (!password) {
-    console.log('⚠️  DASHBOARD_PASSWORD not set — web dashboard disabled.');
-    return;
-  }
   const port = parseInt(process.env.DASHBOARD_PORT, 10) || 3000;
 
   const app = express();
@@ -48,14 +43,6 @@ function startWebServer(client) {
   app.get('/', (req, res) => res.sendFile(path.join(rootDir, 'index.html')));
   app.get('/app-api.js', (req, res) => res.sendFile(path.join(rootDir, 'app-api.js')));
   app.get('/logo.png', (req, res) => res.sendFile(path.join(rootDir, 'logo.png')));
-
-  // ── Auth gate for everything under /api ──
-  app.use('/api', (req, res, next) => {
-    const header = req.headers.authorization || '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-    if (token !== password) return res.status(401).json({ error: 'unauthorized' });
-    next();
-  });
 
   // Write an audit-log entry (best-effort, never blocks an action).
   const log = (action, target, detail) => fb.addLog(action, target, detail).catch(() => {});

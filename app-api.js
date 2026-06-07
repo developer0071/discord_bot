@@ -16,22 +16,12 @@
     return (localStorage.getItem('dash_api') || DEFAULT_API_BASE).replace(/\/+$/, '');
   }
 
-  function getPw() {
-    let p = localStorage.getItem('dash_pw');
-    if (!p) {
-      p = (prompt('Enter dashboard password:') || '').trim();
-      if (p) localStorage.setItem('dash_pw', p);
-    }
-    return p;
-  }
-
   async function api(method, path, body) {
     const res = await fetch(getApiBase() + path, {
       method,
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + getPw() },
+      headers: { 'Content-Type': 'application/json' },
       body: body ? JSON.stringify(body) : undefined,
     });
-    if (res.status === 401) { localStorage.removeItem('dash_pw'); throw new Error('Wrong password'); }
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || ('HTTP ' + res.status)); }
     return res.json();
   }
@@ -193,5 +183,5 @@
     try { await loadData(); }
     catch (e) { showToast('Load failed: ' + e.message, 'error'); }
   })();
-  setInterval(() => { if (localStorage.getItem('dash_pw')) loadData().catch(() => {}); }, 30000);
+  setInterval(() => { loadData().catch(() => {}); }, 30000);
 })();

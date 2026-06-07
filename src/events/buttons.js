@@ -1,6 +1,11 @@
-const { MessageFlags, EmbedBuilder } = require('discord.js');
+const {
+  MessageFlags, EmbedBuilder,
+  ModalBuilder, TextInputBuilder, TextInputStyle,
+  ActionRowBuilder, StringSelectMenuBuilder,
+} = require('discord.js');
 
 const info = require('../config/info');
+const families = require('../config/families');
 const timevote = require('../utils/timevote');
 const verification = require('./verification');
 
@@ -15,6 +20,8 @@ const {
   isInQueue,
   setVote,
   getVotes,
+  getUserProfile,
+  saveUserProfile,
 } = require('../utils/firebase');
 
 const {
@@ -29,41 +36,108 @@ const {
   notifyAdmins,
 } = require('../utils/helpers');
 
-// ─── Join Regiment ──────────────────────────────────────────────────────────
-async function handleJoin(interaction) {
-  const member = interaction.member;
-
-  if ((await isMember(member.id)) || hasRegimentRole(member)) {
-    return interaction.editReply({ embeds: [errorEmbed("You're already in the regiment! 🎖️")] });
-  }
-
-  if (await isInQueue(member.id)) {
-    const position = await getQueuePosition(member.id);
-    return interaction.editReply({ embeds: [errorEmbed(`You're already in the queue at position **#${position}**.`)] });
-  }
-
+// ─── Core join (assumes the interaction is already deferred) ──────────────────
+async function doJoin(interaction, member) {
   const status = await getRegimentStatus();
 
-  // Slot available → assign the role straight away.
   if (status.openSlots > 0) {
     try {
       await assignRegimentRole(member);
     } catch (err) {
-      console.error('[button:join] role assign failed:', err.message);
+      console.error('[join] role assign failed:', err.message);
       return interaction.editReply({
         embeds: [errorEmbed("I couldn't assign the regiment role — an admin needs to check my **Manage Roles** permission and role position.")],
+        components: [],
       });
     }
     await addMember(member.id, member.user.tag);
     await notifyAdmins(interaction.guild, adminNotifyEmbed(member, 'joined'));
-    return interaction.editReply({ embeds: [welcomeEmbed(member)] });
+    return interaction.editReply({ embeds: [welcomeEmbed(member)], components: [] });
   }
 
-  // Regiment full → add to the queue and mark them as a Recruit.
   const { position } = await addToQueue(member.id, member.user.tag);
-  await assignRecruitRole(member).catch(err =>
-    console.error('[button:join] failed to assign Recruit role:', err.message));
-  return interaction.editReply({ embeds: [welcomeEmbed(member, position)] });
+  await assignRecruitRole(member).catch((err) => console.error('[join] recruit role:', err.message));
+  return interaction.editReply({ embeds: [welcomeEmbed(member, position)], components: [] });
+}
+
+// ─── Join Regiment button ─────────────────────────────────────────────────────
+async function handleJoin(interaction) {
+  const member = interaction.member;
+
+  if ((await isMember(member.id)) || hasRegimentRole(member)) {
+    return interaction.reply({ embeds: [errorEmbed("You're already in the regiment! 🎖️")], flags: MessageFlags.Ephemeral });
+  }
+  if (await isInQueue(member.id)) {
+    const position = await getQueuePosition(member.id);
+    return interaction.reply({ embeds: [errorEmbed(`You're already in the queue at position **#${position}**.`)], flags: MessageFlags.Ephemeral });
+  }
+
+  // We need their Roblox info before adding. If we already collected it at
+  // verification, use it automatically. If not (didn't verify / joined before
+  // the system existed), pop up the form to collect it first.
+  const profile = await getUserProfile(member.id);
+  if (!profile || !profile.robloxUsername) {
+    return showJoinModal(interaction); // showModal must be the first response (no defer)
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  await doJoin(interaction, member);
+}
+
+// ─── Join: collect Roblox username (modal) → family picker → join ─────────────
+async function showJoinModal(interaction) {
+  const modal = new ModalBuilder().setCustomId('join_modal').setTitle('Join the Regiment');
+  const roblox = new TextInputBuilder()
+    .setCustomId('roblox_username')
+    .setLabel('What is your Roblox username?')
+    .setPlaceholder('e.g. Builderman')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(50);
+  modal.addComponents(new ActionRowBuilder().addComponents(roblox));
+  await interaction.showModal(modal);
+}
+
+async function handleJoinModal(interaction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const roblox = interaction.fields.getTextInputValue('roblox_username').trim();
+
+  await saveUserProfile(interaction.user.id, {
+    discordId: interaction.user.id,
+    discordTag: interaction.user.tag,
+    discordUsername: interaction.user.username,
+    robloxUsername: roblox,
+  });
+
+  const select = new StringSelectMenuBuilder()
+    .setCustomId('join_families')
+    .setPlaceholder('Pick the families you use')
+    .setMinValues(1)
+    .setMaxValues(families.options.length)
+    .addOptions(families.options.map((f) => ({ label: f.label, value: f.value, emoji: f.emoji })));
+
+  await interaction.editReply({
+    content: `✅ Roblox username saved: **${roblox}**\n\nNow pick the **families** you use to finish joining:`,
+    components: [new ActionRowBuilder().addComponents(select)],
+  });
+}
+
+async function handleJoinFamilies(interaction) {
+  await interaction.deferUpdate();
+
+  const chosen = interaction.values;
+  const roleIds = [];
+  for (const v of chosen) {
+    const fam = families.options.find((f) => f.value === v);
+    if (fam && interaction.guild.roles.cache.has(fam.roleId)) roleIds.push(fam.roleId);
+  }
+  if (roleIds.length) {
+    await interaction.member.roles.add(roleIds).catch((e) => console.error('[join] family roles:', e.message));
+  }
+  await saveUserProfile(interaction.user.id, { families: chosen });
+
+  // Info collected — now actually join the regiment.
+  await doJoin(interaction, interaction.member);
 }
 
 // ─── View Queue ─────────────────────────────────────────────────────────────
@@ -115,7 +189,6 @@ async function handleTimeVote(interaction) {
 
 // ─── Router ─────────────────────────────────────────────────────────────────
 const handlers = {
-  regiment_join: handleJoin,
   regiment_queue: handleViewQueue,
   regiment_position: handleMyPosition,
   regiment_leavequeue: handleLeaveQueue,
@@ -131,7 +204,12 @@ async function handleButton(interaction) {
     return handleTimeVote(interaction);
   }
 
-  // ── Regiment action buttons (need Firestore work → defer first) ──
+  // ── Join Regiment → may open a modal or defer+join; manages its own response ──
+  if (interaction.customId === 'regiment_join') {
+    return handleJoin(interaction);
+  }
+
+  // ── Other regiment buttons (need Firestore work → defer first) ──
   const handler = handlers[interaction.customId];
   if (handler) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -156,4 +234,4 @@ async function handleButton(interaction) {
   }
 }
 
-module.exports = { handleButton };
+module.exports = { handleButton, handleJoinModal, handleJoinFamilies };
