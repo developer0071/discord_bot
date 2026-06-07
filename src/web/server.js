@@ -2,6 +2,8 @@ const path = require('path');
 const express = require('express');
 
 const fb = require('../utils/firebase');
+const auth = require('./auth');
+const { canAccessDashboard } = require('../utils/permissions');
 const { assignRegimentRole, removeRegimentRole } = require('../utils/helpers');
 const { promoteFromQueue } = require('../events/guildMemberRemove');
 
@@ -39,6 +41,24 @@ function startWebServer(client) {
     try { return await guild().members.fetch(userId); } catch { return null; }
   };
 
+  // Only redirect back to known origins after login (prevents open redirects).
+  function safeRedirect(redirect) {
+    const allowed = new Set();
+    if (process.env.DASHBOARD_ORIGIN) allowed.add(process.env.DASHBOARD_ORIGIN.replace(/\/+$/, ''));
+    try { allowed.add(new URL(process.env.DISCORD_OAUTH_REDIRECT).origin); } catch { /* ignore */ }
+    try { const u = new URL(redirect); if (allowed.has(u.origin)) return redirect.split('#')[0]; } catch { /* ignore */ }
+    return process.env.DASHBOARD_ORIGIN || '/';
+  }
+
+  // Minimal HTML page for auth outcomes shown directly in the browser.
+  function authMessagePage(title, message) {
+    return `<!doctype html><meta charset="utf-8"><title>${title}</title>` +
+      `<div style="font-family:system-ui,sans-serif;background:#0b0b0f;color:#f5f5f7;height:100vh;display:flex;align-items:center;justify-content:center;text-align:center">` +
+      `<div style="max-width:360px;padding:32px"><h1 style="font-size:22px">${title}</h1>` +
+      `<p style="opacity:.7">${message}</p>` +
+      `<p><a href="${process.env.DASHBOARD_ORIGIN || '/'}" style="color:#7aa2ff">Back to dashboard</a></p></div></div>`;
+  }
+
   // ── Public: the dashboard UI (login happens client-side; data needs auth) ──
   app.get('/', (req, res) => res.sendFile(path.join(rootDir, 'index.html')));
   app.get('/app-api.js', (req, res) => res.sendFile(path.join(rootDir, 'app-api.js')));
@@ -46,6 +66,41 @@ function startWebServer(client) {
 
   // Write an audit-log entry (best-effort, never blocks an action).
   const log = (action, target, detail) => fb.addLog(action, target, detail).catch(() => {});
+
+  // ── Auth: "Login with Discord" → signed session token ──
+  // Only guild members holding a REGIMENT_MANAGE_ROLE_IDS role may sign in.
+  app.get('/auth/discord/login', (req, res) => {
+    if (!auth.isConfigured()) return res.status(503).send('Dashboard auth is not configured on the server.');
+    const redirect = typeof req.query.redirect === 'string' ? req.query.redirect : '';
+    res.redirect(auth.authorizeUrl(auth.makeState(redirect)));
+  });
+
+  app.get('/auth/discord/callback', async (req, res) => {
+    if (!auth.isConfigured()) return res.status(503).send('Dashboard auth is not configured on the server.');
+    try {
+      const { code, state } = req.query;
+      const st = auth.readState(state);
+      if (!code || !st) return res.status(400).send(authMessagePage('Login failed', 'The login link expired or was invalid — please try again.'));
+
+      const tok = await auth.exchangeCode(code);
+      const discordUser = await auth.fetchDiscordUser(tok.access_token);
+
+      const member = await fetchMember(discordUser.id);
+      if (!member || !canAccessDashboard(member)) {
+        return res.status(403).send(authMessagePage('Access denied', "Your Discord account isn't in the server or doesn't have a dashboard-access role."));
+      }
+
+      const session = auth.makeSession({ id: discordUser.id, tag: member.user.tag });
+      log('DASHBOARD_LOGIN', member.user.tag, 'Signed in to the dashboard');
+      res.redirect(`${safeRedirect(st.redirect)}#token=${encodeURIComponent(session)}`);
+    } catch (e) {
+      console.error('[web] auth callback:', e);
+      res.status(500).send(authMessagePage('Login failed', 'Something went wrong during sign-in — please try again.'));
+    }
+  });
+
+  // Everything under /api requires a valid session token from here on.
+  app.use('/api', auth.requireAuth);
 
   // ── Data ──
   app.get('/api/data', async (req, res) => {
@@ -200,7 +255,14 @@ function startWebServer(client) {
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
 
-  app.listen(port, () => console.log(`🌐 Dashboard running on port ${port}`));
+  app.listen(port, () => {
+    console.log(`🌐 Dashboard running on port ${port}`);
+    if (!auth.isConfigured()) {
+      console.warn(
+        `⚠️  Dashboard auth is DISABLED — /api routes will reject every request until you set: ${auth.missingVars().join(', ')}`
+      );
+    }
+  });
 }
 
 module.exports = { startWebServer };

@@ -28,4 +28,12 @@ function canAdd(member) {
   return canManage(member) || hasAnyRole(member, roleIds('REGIMENT_ADD_ROLE_IDS'));
 }
 
-module.exports = { canManage, canAdd };
+/**
+ * Allowed to sign in to the web dashboard. Configured separately from the
+ * in-Discord command roles via HAVE_ACCESS_ROLES (comma-separated role IDs).
+ */
+function canAccessDashboard(member) {
+  return hasAnyRole(member, roleIds('HAVE_ACCESS_ROLES'));
+}
+
+module.exports = { canManage, canAdd, canAccessDashboard };

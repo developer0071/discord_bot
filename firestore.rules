@@ -1,0 +1,12 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // All access to this database goes through the bot's Firebase Admin SDK, which
+    // bypasses these rules entirely. No browser/client should ever read or write
+    // Firestore directly, so deny everything at the client layer.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

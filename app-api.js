@@ -16,18 +16,66 @@
     return (localStorage.getItem('dash_api') || DEFAULT_API_BASE).replace(/\/+$/, '');
   }
 
+  // ── Auth (Discord OAuth → signed session token) ──
+  function getToken() { return localStorage.getItem('dash_token') || ''; }
+  function setToken(t) { if (t) localStorage.setItem('dash_token', t); else localStorage.removeItem('dash_token'); }
+
+  // After returning from Discord login the token arrives in the URL fragment.
+  (function captureToken() {
+    const m = location.hash.match(/(?:^|#|&)token=([^&]+)/);
+    if (m) { setToken(decodeURIComponent(m[1])); history.replaceState(null, '', location.pathname + location.search); }
+  })();
+
+  window.login = function () {
+    const back = location.origin + location.pathname;
+    location.href = getApiBase() + '/auth/discord/login?redirect=' + encodeURIComponent(back);
+  };
+  window.logout = function () { setToken(''); location.reload(); };
+
   async function api(method, path, body) {
     const res = await fetch(getApiBase() + path, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}),
+      },
       body: body ? JSON.stringify(body) : undefined,
     });
+    if (res.status === 401 || res.status === 403) {
+      setToken('');
+      showLoginOverlay(res.status === 403 ? "Your Discord account doesn't have permission to use this dashboard." : '');
+      throw new Error('Not authenticated');
+    }
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || ('HTTP ' + res.status)); }
     return res.json();
   }
   window.api = api;
   // Console helpers to reconfigure: setBackend('https://...'), then reload.
   window.setBackend = (url) => { localStorage.setItem('dash_api', (url || '').replace(/\/+$/, '')); location.reload(); };
+
+  // ── Login overlay (shown whenever there is no valid session) ──
+  function showLoginOverlay(message) {
+    const existing = document.getElementById('loginOverlay');
+    if (existing) {
+      if (message) { const mEl = document.getElementById('loginOverlayMsg'); if (mEl) mEl.textContent = message; }
+      return;
+    }
+    const el = document.createElement('div');
+    el.id = 'loginOverlay';
+    el.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:#0b0b0f;';
+    el.innerHTML =
+      '<div style="text-align:center;font-family:system-ui,Segoe UI,sans-serif;color:#f5f5f7;max-width:340px;padding:32px;">' +
+        '<img src="' + getApiBase() + '/logo.png" alt="" style="width:72px;height:72px;border-radius:16px;margin-bottom:20px;" onerror="this.style.display=\'none\'">' +
+        '<h1 style="font-size:22px;margin:0 0 8px;">Dashboard login</h1>' +
+        '<p id="loginOverlayMsg" style="opacity:.7;margin:0 0 24px;font-size:14px;">' + (message || 'Sign in with Discord to manage the regiment.') + '</p>' +
+        '<button onclick="login()" style="cursor:pointer;border:none;border-radius:10px;padding:12px 22px;font-size:15px;font-weight:600;color:#fff;background:#5865F2;display:inline-flex;align-items:center;gap:10px;">' +
+          '<i class="fab fa-discord"></i> Login with Discord' +
+        '</button>' +
+      '</div>';
+    document.body.appendChild(el);
+  }
+  function hideLoginOverlay() { const el = document.getElementById('loginOverlay'); if (el) el.remove(); }
+  window.showLoginOverlay = showLoginOverlay;
 
   async function loadData() {
     const data = await api('GET', '/api/data');
@@ -180,8 +228,21 @@
 
   // ── Init + periodic refresh ──
   (async function init() {
-    try { await loadData(); }
-    catch (e) { showToast('Load failed: ' + e.message, 'error'); }
+    if (!getToken()) { showLoginOverlay(); return; }
+    try { await loadData(); hideLoginOverlay(); injectLogoutButton(); }
+    catch (e) { if (e.message !== 'Not authenticated') showToast('Load failed: ' + e.message, 'error'); }
   })();
-  setInterval(() => { loadData().catch(() => {}); }, 30000);
+  setInterval(() => { if (getToken()) loadData().catch(() => {}); }, 30000);
+
+  // Small logout control (kept here so no edits to index.html are needed).
+  function injectLogoutButton() {
+    if (document.getElementById('dashLogout')) return;
+    const b = document.createElement('button');
+    b.id = 'dashLogout';
+    b.title = 'Log out';
+    b.onclick = () => logout();
+    b.style.cssText = 'position:fixed;bottom:16px;left:16px;z-index:9000;cursor:pointer;border:1px solid rgba(255,255,255,.15);background:rgba(20,20,28,.85);color:#f5f5f7;border-radius:8px;padding:8px 12px;font-size:13px;font-family:system-ui,sans-serif;';
+    b.innerHTML = '<i class="fas fa-right-from-bracket"></i> Log out';
+    document.body.appendChild(b);
+  }
 })();

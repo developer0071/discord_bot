@@ -1,6 +1,7 @@
 const { EmbedBuilder } = require('discord.js');
 const vip = require('../config/vipServers');
 const funny = require('../config/funny');
+const timevote = require('../utils/timevote');
 
 // Build a whole-word, case-insensitive regex from a list of trigger phrases.
 // A space in a phrase also matches a hyphen or nothing.
@@ -52,15 +53,27 @@ function funnyEmbed() {
   return new EmbedBuilder().setColor(funny.color || 0x9b59b6).setTitle(funny.title).setDescription(desc);
 }
 
+// ─── UTC / time-zone detection → post a time vote ─────────────────────────────
+// Lets members start the time-vote poll by just mentioning "UTC" or "time zone"
+// in chat, no /timevote command needed. 'time zone' also matches "timezone"; the
+// poll itself is identical to what /timevote posts.
+const TIMEVOTE_PATTERN = buildTriggerPattern(['utc', 'time zone', 'time vote']);
+
+function matchesTimeVote(content) {
+  return TIMEVOTE_PATTERN.test(content);
+}
+
 // ─── Per-user cooldowns ──────────────────────────────────────────────────────
 const COOLDOWN_MS = 60 * 1000;
+const VOTE_COOLDOWN_MS = 5 * 60 * 1000; // a 24-button poll is heavy; throttle harder than text replies
 const regimentCooldown = new Map();
 const vipCooldown = new Map();
 const funnyCooldown = new Map();
+const timeVoteCooldown = new Map();
 
-function onCooldown(map, userId) {
+function onCooldown(map, userId, ms = COOLDOWN_MS) {
   const now = Date.now();
-  if (now - (map.get(userId) || 0) < COOLDOWN_MS) return true;
+  if (now - (map.get(userId) || 0) < ms) return true;
   map.set(userId, now);
   return false;
 }
@@ -103,6 +116,21 @@ module.exports = {
       return;
     }
 
+    // ── UTC / time-zone mention → post a time vote ──
+    if (matchesTimeVote(content)) {
+      if (onCooldown(timeVoteCooldown, message.author.id, VOTE_COOLDOWN_MS)) return;
+      try {
+        await message.channel.send({
+          content: timevote.buildContent(),
+          components: timevote.buildButtons(),
+        });
+        console.log(`[TIMEVOTE] Auto-posted a time vote for ${message.author.tag}`);
+      } catch (err) {
+        console.error('[messageCreate] Time-vote post failed:', err);
+      }
+      return;
+    }
+
     // ── Regiment join question ──
     if (mentionsRegiment(content)) {
       if (onCooldown(regimentCooldown, message.author.id)) return;
@@ -124,4 +152,5 @@ module.exports = {
   mentionsRegiment,
   matchesVipRequest,
   matchesFunny,
+  matchesTimeVote,
 };
