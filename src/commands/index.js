@@ -399,6 +399,135 @@ const setupVerifyCommand = {
   },
 };
 
+// ─── /giverole — MANAGE (mass-assign a role) ────────────────────────────────────
+const giveRoleCommand = {
+  data: new SlashCommandBuilder()
+    .setName('giverole')
+    .setDescription('Give a role to all members (or a single user) in the server')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
+    .addRoleOption(opt =>
+      opt.setName('role')
+        .setDescription('The role to assign')
+        .setRequired(true)
+    )
+    .addStringOption(opt =>
+      opt.setName('who')
+        .setDescription('Who to give the role to ("all" or mention a user)')
+        .setRequired(false)
+    )
+    .addUserOption(opt =>
+      opt.setName('user')
+        .setDescription('A specific user to give the role to (instead of all)')
+        .setRequired(false)
+    ),
+
+  async execute(interaction) {
+    if (!canManage(interaction.member)) return deny(interaction);
+
+    const role = interaction.options.getRole('role');
+    const who  = (interaction.options.getString('who') || 'all').toLowerCase().trim();
+    const singleUser = interaction.options.getUser('user');
+
+    // Validate the role is assignable by the bot
+    const botMember = interaction.guild.members.me;
+    if (role.position >= botMember.roles.highest.position) {
+      return interaction.reply({
+        embeds: [errorEmbed(`I can't assign **${role.name}** — it's higher than (or equal to) my highest role.`)],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    if (role.managed) {
+      return interaction.reply({
+        embeds: [errorEmbed(`**${role.name}** is a bot/integration-managed role and can't be assigned manually.`)],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    // ── Single-user mode ──
+    if (singleUser || (who !== 'all')) {
+      let targetMember;
+      if (singleUser) {
+        targetMember = interaction.options.getMember('user');
+      } else {
+        // Try to parse a user ID from the 'who' string
+        const idMatch = who.replace(/[<@!>]/g, '');
+        try { targetMember = await interaction.guild.members.fetch(idMatch); } catch { targetMember = null; }
+      }
+      if (!targetMember) {
+        return interaction.reply({
+          embeds: [errorEmbed('Could not find that user in this server. Use `all` or mention a valid user.')],
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+      if (targetMember.roles.cache.has(role.id)) {
+        return interaction.reply({
+          embeds: [errorEmbed(`**${targetMember.user.tag}** already has the **${role.name}** role.`)],
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+      await targetMember.roles.add(role);
+      return interaction.reply({
+        embeds: [successEmbed(`Assigned **${role.name}** to **${targetMember.user.tag}**.`)],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    // ── All-members mode ──
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    // Fetch every member (forces the cache to be complete)
+    const allMembers = await interaction.guild.members.fetch();
+
+    // Filter out bots and members who already have the role
+    const targets = allMembers.filter(m => !m.user.bot && !m.roles.cache.has(role.id));
+
+    if (targets.size === 0) {
+      return interaction.editReply({
+        embeds: [successEmbed(`Everyone already has the **${role.name}** role — nothing to do! ✅`)],
+      });
+    }
+
+    await interaction.editReply({
+      embeds: [{
+        color: 0xf0a500,
+        title: '⏳ Assigning role…',
+        description: `Giving **${role.name}** to **${targets.size}** member(s). This may take a moment…`,
+      }],
+    });
+
+    let assigned = 0, failed = 0;
+    for (const [, member] of targets) {
+      try {
+        await member.roles.add(role);
+        assigned++;
+      } catch {
+        failed++;
+      }
+      // Progress update every 25 members
+      if ((assigned + failed) % 25 === 0) {
+        await interaction.editReply({
+          embeds: [{
+            color: 0xf0a500,
+            title: '⏳ Assigning role…',
+            description: `Progress: **${assigned + failed}**/${targets.size}\n✅ ${assigned} assigned · ❌ ${failed} failed`,
+          }],
+        }).catch(() => {});
+      }
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor(failed === 0 ? 0x57f287 : 0xf0a500)
+      .setTitle('✅ Role assignment complete')
+      .setDescription(
+        `**${role.name}** has been given to **${assigned}** member(s).` +
+        (failed > 0 ? `\n⚠️ Failed for **${failed}** member(s) (permission issues).` : '')
+      )
+      .setTimestamp();
+
+    await interaction.editReply({ embeds: [embed] });
+  },
+};
+
 module.exports = [
   queueCommand,
   myPositionCommand,
@@ -412,4 +541,5 @@ module.exports = [
   infoPanelCommand,
   setupVerifyCommand,
   timeVoteCommand,
+  giveRoleCommand,
 ];
