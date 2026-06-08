@@ -35,6 +35,7 @@ const { canManage, canAdd } = require('../utils/permissions');
 const { promoteFromQueue } = require('../events/guildMemberRemove');
 const info = require('../config/info');
 const timevote = require('../utils/timevote');
+const vip = require('../config/vipServers');
 
 // Reply used when a member lacks permission for a command.
 function deny(interaction) {
@@ -528,6 +529,44 @@ const giveRoleCommand = {
   },
 };
 
+// ─── /ps — Private server codes ─────────────────────────────────────────────
+const psCommand = {
+  data: new SlashCommandBuilder()
+    .setName('ps')
+    .setDescription('Show private server codes'),
+
+  async execute(interaction) {
+    const lines = vip.servers.length
+      ? vip.servers.map((s) => `**${s.name}** — \`${s.code}\``).join('\n')
+      : '_No codes have been set yet._';
+
+    const embed = new EmbedBuilder()
+      .setColor(vip.color || 0x9b59b6)
+      .setTitle(vip.title)
+      .setDescription(lines);
+
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+  },
+};
+
+// ─── /utc — Post a UTC time vote ─────────────────────────────────────────────
+const utcCommand = {
+  data: new SlashCommandBuilder()
+    .setName('utc')
+    .setDescription('Post a UTC time vote that auto-converts to each member\'s local time'),
+
+  async execute(interaction) {
+    await interaction.channel.send({
+      content: timevote.buildContent(),
+      components: timevote.buildButtons(),
+    });
+    await interaction.reply({
+      embeds: [successEmbed('Time vote posted — members can click a letter to vote.')],
+      flags: MessageFlags.Ephemeral,
+    });
+  },
+};
+
 module.exports = [
   queueCommand,
   myPositionCommand,
@@ -542,4 +581,6 @@ module.exports = [
   setupVerifyCommand,
   timeVoteCommand,
   giveRoleCommand,
+  psCommand,
+  utcCommand,
 ];
