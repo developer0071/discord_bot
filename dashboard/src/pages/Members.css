@@ -1,0 +1,19 @@
+/* Members page-specific styles (shared table/form styles are in index.css) */
+.confirm-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  text-align: center;
+  padding: 8px 0;
+}
+.confirm-text strong { color: var(--text-primary); }
+.confirm-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+  margin: 16px 0;
+  padding: 12px;
+  background: var(--bg-card);
+  border-radius: 10px;
+}

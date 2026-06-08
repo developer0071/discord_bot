@@ -3,9 +3,10 @@ const express = require('express');
 
 const fb = require('../utils/firebase');
 const auth = require('./auth');
-const { canAccessDashboard } = require('../utils/permissions');
+const { canAccessDashboard, canManage } = require('../utils/permissions');
 const { assignRegimentRole, removeRegimentRole } = require('../utils/helpers');
 const { promoteFromQueue } = require('../events/guildMemberRemove');
+const giveawayUtil = require('../utils/giveaway');
 
 // Firestore Timestamp → epoch ms (or null).
 function tsToMs(ts) {
@@ -30,7 +31,7 @@ function startWebServer(client) {
   app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', process.env.DASHBOARD_ORIGIN || '*');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
     if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
   });
@@ -99,8 +100,115 @@ function startWebServer(client) {
     }
   });
 
+  // ── Public giveaway info (no auth) ──
+  app.get('/api/giveaways/:id/public', async (req, res) => {
+    try {
+      const g = await fb.getGiveaway(req.params.id);
+      if (!g) return res.status(404).json({ error: 'Giveaway not found' });
+      res.json({
+        id: g.id,
+        title: g.title,
+        prize: g.prize || '',
+        status: g.status,
+        entryCount: giveawayUtil.entrantCount(g),
+        winnerCount: g.winnerCount || 1,
+        startsAt: tsToMs(g.startsAt),
+        endsAt: tsToMs(g.endsAt),
+        hostTag: g.hostTag || '',
+        winners: (g.winners || []).map((w) => ({ userId: w.userId, tag: w.tag })),
+      });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Public giveaway page (shareable link, like dyno.gg/giveaway/xxx)
+  app.get('/giveaway/:id', (req, res) => {
+    const apiBase = process.env.DASHBOARD_ORIGIN || '';
+    const page = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Giveaway</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Space Grotesk',system-ui,sans-serif;background:#0a0708;color:#f1e9ea;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.card{max-width:520px;width:100%;background:#161011;border:1px solid #34262a;border-radius:16px;padding:32px;text-align:center}
+h1{font-size:24px;margin-bottom:8px;color:#e0303c}
+.prize{color:#b29aa0;margin-bottom:24px;line-height:1.6;font-size:14px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px}
+.stat{background:#1c1515;border-radius:10px;padding:16px 8px}
+.stat .num{font-size:22px;font-weight:700;color:#f1e9ea}
+.stat .lbl{font-size:11px;color:#7c666a;text-transform:uppercase;margin-top:4px}
+.timer{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;color:#e0303c;margin-bottom:20px}
+.btn{display:inline-block;padding:12px 28px;border-radius:10px;border:none;font-size:15px;font-weight:600;cursor:pointer;text-decoration:none;margin:4px}
+.btn-primary{background:#e0303c;color:#fff}.btn-discord{background:#5865F2;color:#fff}
+.winners{color:#2ed573;font-size:16px;font-weight:600;margin:16px 0}
+.host{font-size:12px;color:#7c666a;margin-top:16px}
+.share{margin-top:20px;padding-top:20px;border-top:1px solid #34262a}
+.share input{width:100%;padding:10px;background:#1c1515;border:1px solid #34262a;border-radius:8px;color:#b29aa0;font-size:13px;margin-bottom:8px}
+.msg{padding:12px;border-radius:8px;font-size:13px;margin-bottom:12px;display:none}
+.msg.ok{display:block;background:rgba(46,213,115,.12);color:#2ed573}
+.msg.err{display:block;background:rgba(255,71,87,.12);color:#ff4757}
+</style></head><body>
+<div class="card" id="card"><p style="color:#7c666a">Loading giveaway…</p></div>
+<script>
+const ID='${req.params.id}';
+const API=location.origin;
+const TOKEN=localStorage.getItem('dash_token')||'';
+function pad(n){return String(n).padStart(2,'0')}
+function fmt(ms){if(ms<=0)return'00:00:00:00';const s=Math.floor(ms/1000);const d=Math.floor(s/86400);const h=Math.floor((s%86400)/3600);const m=Math.floor((s%3600)/60);const sec=s%60;return pad(d)+':'+pad(h)+':'+pad(m)+':'+pad(sec)}
+let endsAt=0,timerId;
+async function load(){
+  const r=await fetch(API+'/api/giveaways/'+ID+'/public');
+  if(!r.ok){document.getElementById('card').innerHTML='<p style="color:#ff4757">Giveaway not found.</p>';return}
+  const g=await r.json();endsAt=g.endsAt||0;
+  const active=g.status==='active'||g.status==='scheduled';
+  document.getElementById('card').innerHTML=
+    '<h1>'+g.title+'</h1>'+
+    (g.prize?'<p class="prize">'+g.prize.replace(/</g,'&lt;')+'</p>':'')+
+    '<div class="stats"><div class="stat"><div class="num" id="entryNum">'+g.entryCount+'</div><div class="lbl">Entries</div></div>'+
+    '<div class="stat"><div class="num">'+g.winnerCount+'</div><div class="lbl">Winners</div></div>'+
+    '<div class="stat"><div class="num" id="myEntries">—</div><div class="lbl">Your Entries</div></div></div>'+
+    (active?'<div class="timer" id="timer">'+fmt(endsAt-Date.now())+'</div><div class="lbl" style="margin-bottom:16px">Time Left</div>':'')+
+    (g.status==='ended'&&g.winners.length?'<div class="winners">🏆 '+g.winners.map(w=>w.tag).join(', ')+'</div>':'')+
+    (g.status==='ended'&&!g.winners.length?'<div class="winners">No winners</div>':'')+
+    '<div id="msg" class="msg"></div>'+
+    (active?'<button class="btn btn-primary" id="enterBtn" onclick="enterGiveaway()">Enter Giveaway</button> ':'')+
+    '<a class="btn btn-discord" href="https://discord.com/channels/@me" target="_blank">Open Discord</a>'+
+    (g.hostTag?'<p class="host">Hosted by '+g.hostTag+'</p>':'')+
+    '<div class="share"><p style="font-size:12px;color:#7c666a;margin-bottom:8px">Share this giveaway</p>'+
+    '<input readonly value="'+location.href+'" onclick="this.select();navigator.clipboard.writeText(this.value)"></div>';
+  if(active){timerId=setInterval(()=>{const el=document.getElementById('timer');if(el)el.textContent=fmt(endsAt-Date.now())},1000)}
+  if(TOKEN)checkEntry();
+}
+async function checkEntry(){
+  try{const r=await fetch(API+'/api/giveaways/'+ID+'/me',{headers:{Authorization:'Bearer '+TOKEN}});
+  if(r.ok){const d=await r.json();document.getElementById('myEntries').textContent=d.entered?'1':'0';}}catch(e){}
+}
+async function enterGiveaway(){
+  if(!TOKEN){location.href=API+'/auth/discord/login?redirect='+encodeURIComponent(location.href);return}
+  const msg=document.getElementById('msg');msg.className='msg';msg.textContent='';
+  try{const r=await fetch(API+'/api/giveaways/'+ID+'/enter',{method:'POST',headers:{Authorization:'Bearer '+TOKEN,'Content-Type':'application/json'}});
+  const d=await r.json();if(!r.ok)throw new Error(d.error||'Failed');
+  msg.className='msg ok';msg.textContent='Giveaway entered!';document.getElementById('myEntries').textContent='1';
+  const n=document.getElementById('entryNum');if(n)n.textContent=String(parseInt(n.textContent,10)+1);
+  }catch(e){msg.className='msg err';msg.textContent=e.message}
+}
+load();
+</script></body></html>`;
+    res.send(page);
+  });
+
   // Everything under /api requires a valid session token from here on.
   app.use('/api', auth.requireAuth);
+
+  // Managers only (create / end / delete giveaways).
+  async function requireManage(req, res, next) {
+    const member = await fetchMember(req.user.id);
+    if (!member || !canManage(member)) {
+      return res.status(403).json({ error: 'You need manage permissions for this action' });
+    }
+    req.member = member;
+    next();
+  }
 
   // ── Data ──
   app.get('/api/data', async (req, res) => {
@@ -229,6 +337,214 @@ function startWebServer(client) {
       const toFill = newMax - status.currentCount;
       for (let i = 0; i < toFill; i++) await promoteFromQueue(guild());
       log('SETTINGS_CHANGED', 'System', `Max slots set to ${newMax}`);
+      res.json({ ok: true });
+    } catch (e) { res.status(400).json({ error: e.message }); }
+  });
+
+  // ── Giveaways (dashboard-only management) ──
+  app.get('/api/channels', async (req, res) => {
+    try {
+      const g = guild();
+      if (!g) return res.json({ channels: [] });
+      const channels = g.channels.cache
+        .filter((c) => c.isTextBased() && !c.isThread())
+        .map((c) => ({ id: c.id, name: c.name, parent: c.parent?.name || null }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      const defaultChannelId = process.env.GIVEAWAYS_CHANNEL?.trim() || '';
+      res.json({ channels, defaultChannelId });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.get('/api/giveaways', async (req, res) => {
+    try {
+      const list = await fb.getAllGiveaways();
+      res.json({
+        giveaways: list.map((g) => ({
+          id: g.id,
+          title: g.title,
+          prize: g.prize || '',
+          status: g.status,
+          entryCount: giveawayUtil.entrantCount(g),
+          winnerCount: g.winnerCount || 1,
+          channelId: g.channelId || '',
+          messageId: g.messageId || '',
+          hostId: g.hostId || '',
+          hostTag: g.hostTag || '',
+          startsAt: tsToMs(g.startsAt),
+          endsAt: tsToMs(g.endsAt),
+          winners: g.winners || [],
+          requiredRoleIds: g.requiredRoleIds || [],
+        })),
+      });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.get('/api/giveaways/:id/me', async (req, res) => {
+    try {
+      const entered = await fb.isGiveawayEntrant(req.params.id, req.user.id);
+      res.json({ entered });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.get('/api/giveaways/:id', async (req, res) => {
+    try {
+      const g = await fb.getGiveaway(req.params.id);
+      if (!g) return res.status(404).json({ error: 'Giveaway not found' });
+      res.json({
+        ...g,
+        entryCount: giveawayUtil.entrantCount(g),
+        startsAt: tsToMs(g.startsAt),
+        endsAt: tsToMs(g.endsAt),
+        entrants: Object.entries(g.entrants || {}).map(([userId, e]) => ({
+          userId, tag: e.tag, enteredAt: tsToMs(e.enteredAt),
+        })),
+      });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.post('/api/giveaways/:id/enter', async (req, res) => {
+    try {
+      const member = await fetchMember(req.user.id);
+      if (!member) return res.status(403).json({ error: 'You must be in the server to enter' });
+
+      const g = await fb.getGiveaway(req.params.id);
+      if (!g || g.status !== 'active') return res.status(400).json({ error: 'Giveaway is not active' });
+
+      const endMs = giveawayUtil.endsAtMs(g);
+      if (endMs && Date.now() >= endMs) return res.status(400).json({ error: 'Giveaway has ended' });
+
+      const requiredRoles = g.requiredRoleIds || [];
+      if (requiredRoles.length && !requiredRoles.some((id) => member.roles.cache.has(id))) {
+        return res.status(403).json({ error: "You don't have the required role" });
+      }
+
+      if (await fb.isGiveawayEntrant(req.params.id, req.user.id)) {
+        return res.status(400).json({ error: 'Already entered' });
+      }
+
+      await fb.addGiveawayEntrant(req.params.id, req.user.id, member.user.tag);
+      const updated = await fb.getGiveaway(req.params.id);
+      await giveawayUtil.refreshMessage(client, updated);
+      res.json({ ok: true });
+    } catch (e) { res.status(400).json({ error: e.message }); }
+  });
+
+  app.post('/api/giveaways/:id/leave', async (req, res) => {
+    try {
+      const g = await fb.getGiveaway(req.params.id);
+      if (!g || g.status !== 'active') return res.status(400).json({ error: 'Giveaway is not active' });
+      if (!(await fb.isGiveawayEntrant(req.params.id, req.user.id))) {
+        return res.status(400).json({ error: 'Not entered' });
+      }
+      await fb.removeGiveawayEntrant(req.params.id, req.user.id);
+      const updated = await fb.getGiveaway(req.params.id);
+      await giveawayUtil.refreshMessage(client, updated);
+      res.json({ ok: true });
+    } catch (e) { res.status(400).json({ error: e.message }); }
+  });
+
+  app.post('/api/giveaways', requireManage, async (req, res) => {
+    try {
+      const { title, prize, startsAt, endsAt, winnerCount, channelId, requiredRoleIds } = req.body;
+      if (!title?.trim()) return res.status(400).json({ error: 'Title is required' });
+
+      const startMs = startsAt ? new Date(startsAt).getTime() : Date.now();
+      const endMs = endsAt ? new Date(endsAt).getTime() : null;
+      if (!endMs || endMs <= startMs) return res.status(400).json({ error: 'End time must be after start time' });
+
+      const winners = parseInt(winnerCount, 10) || 1;
+      if (winners < 1) return res.status(400).json({ error: 'At least 1 winner required' });
+
+      const ch = channelId?.trim() || process.env.GIVEAWAYS_CHANNEL?.trim();
+      if (!ch) return res.status(400).json({ error: 'No giveaway channel selected' });
+
+      const id = giveawayUtil.generateId();
+      const now = Date.now();
+      const status = startMs <= now ? 'active' : 'scheduled';
+
+      const data = {
+        title: title.trim(),
+        prize: (prize || '').trim(),
+        startsAt: new Date(startMs),
+        endsAt: new Date(endMs),
+        winnerCount: winners,
+        channelId: ch,
+        hostId: req.user.id,
+        hostTag: req.user.tag,
+        status,
+        requiredRoleIds: Array.isArray(requiredRoleIds) ? requiredRoleIds : [],
+      };
+
+      await fb.createGiveaway(id, data);
+
+      if (status === 'active') {
+        await giveawayUtil.postGiveaway(client, { id, ...data });
+      }
+
+      log('GIVEAWAY_CREATED', req.user.tag, `Created "${title.trim()}" (${id})`);
+      res.json({ ok: true, id });
+    } catch (e) {
+      console.error('[web] create giveaway:', e);
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/giveaways/:id/end', requireManage, async (req, res) => {
+    try {
+      const result = await giveawayUtil.endGiveaway(client, req.params.id);
+      if (!result) return res.status(404).json({ error: 'Giveaway not found or already ended' });
+      log('GIVEAWAY_ENDED', req.user.tag, `Ended giveaway ${req.params.id}`);
+      res.json({ ok: true, winners: result.winners });
+    } catch (e) { res.status(400).json({ error: e.message }); }
+  });
+
+  app.post('/api/giveaways/:id/reroll', requireManage, async (req, res) => {
+    try {
+      const g = await fb.getGiveaway(req.params.id);
+      if (!g || g.status !== 'ended') return res.status(400).json({ error: 'Giveaway must be ended to reroll' });
+
+      const entrantIds = Object.keys(g.entrants || {});
+      const winnerIds = giveawayUtil.pickWinners(entrantIds, g.winnerCount || 1);
+      const winners = winnerIds.map((userId) => ({
+        userId,
+        tag: g.entrants[userId]?.tag || userId,
+      }));
+
+      await fb.updateGiveaway(req.params.id, { winners });
+      const updated = await fb.getGiveaway(req.params.id);
+      await giveawayUtil.refreshMessage(client, updated);
+
+      if (winners.length && g.channelId) {
+        const channel = await client.channels.fetch(g.channelId).catch(() => null);
+        if (channel) {
+          const mentions = winners.map((w) => `<@${w.userId}>`).join(', ');
+          await channel.send({
+            content: `🔄 **Giveaway rerolled!** New winner(s): ${mentions} for **${g.title}**`,
+          });
+        }
+      }
+
+      log('GIVEAWAY_REROLL', req.user.tag, `Rerolled ${req.params.id}`);
+      res.json({ ok: true, winners });
+    } catch (e) { res.status(400).json({ error: e.message }); }
+  });
+
+  app.delete('/api/giveaways/:id', requireManage, async (req, res) => {
+    try {
+      const g = await fb.getGiveaway(req.params.id);
+      if (!g) return res.status(404).json({ error: 'Giveaway not found' });
+
+      if (g.messageId && g.channelId) {
+        try {
+          const channel = await client.channels.fetch(g.channelId);
+          const message = await channel.messages.fetch(g.messageId);
+          await message.delete();
+        } catch { /* message may already be gone */ }
+      }
+
+      await fb.updateGiveaway(req.params.id, { status: 'cancelled' });
+      await fb.deleteGiveaway(req.params.id);
+      log('GIVEAWAY_DELETED', req.user.tag, `Deleted ${req.params.id}`);
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });

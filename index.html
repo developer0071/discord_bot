@@ -931,6 +931,10 @@
       <div class="nav-item" data-tab="feedback" onclick="switchTab('feedback')">
         <i class="fas fa-message"></i> Feedback
       </div>
+      <div class="nav-item" data-tab="giveaways" onclick="switchTab('giveaways')">
+        <i class="fas fa-gift"></i> Giveaways
+        <span class="nav-badge" id="giveawayCount" style="display:none">0</span>
+      </div>
       <div class="nav-section-title" style="margin-top:12px">System</div>
       <div class="nav-item" data-tab="logs" onclick="switchTab('logs')">
         <i class="fas fa-scroll"></i> Audit Log
@@ -1061,6 +1065,27 @@
         <div id="feedbackList"></div>
       </div>
 
+      <!-- GIVEAWAYS TAB -->
+      <div class="tab-content" id="tab-giveaways">
+        <div class="page-title-row">
+          <div>
+            <div class="page-title">Giveaways</div>
+            <div class="page-subtitle">Create and manage server giveaways from the dashboard</div>
+          </div>
+          <button class="btn btn-primary" onclick="openGiveawayModal()"><i class="fas fa-plus"></i> Create Giveaway</button>
+        </div>
+
+        <div class="filters-bar" style="margin-bottom:16px">
+          <button class="filter-chip active" data-gfilter="active" onclick="setGiveawayFilter('active',this)">Active Giveaways</button>
+          <button class="filter-chip" data-gfilter="ended" onclick="setGiveawayFilter('ended',this)">Ended Giveaways</button>
+          <div style="margin-left:auto">
+            <input class="form-input" id="giveawaySearch" placeholder="Search giveaways..." style="width:220px" oninput="renderGiveaways()">
+          </div>
+        </div>
+
+        <div class="queue-grid" id="giveawayGrid"></div>
+      </div>
+
       <!-- LOGS TAB -->
       <div class="tab-content" id="tab-logs">
         <div class="page-title-row">
@@ -1149,6 +1174,48 @@
     </div>
     <div class="modal-body" id="viewModalBody"></div>
     <div class="modal-footer" id="viewModalFooter"></div>
+  </div>
+</div>
+
+<!-- Create Giveaway Modal -->
+<div class="modal-overlay" id="giveawayModal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h3><i class="fas fa-gift"></i> Create Giveaway</h3>
+      <button class="modal-close" onclick="closeModal('giveawayModal')"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Giveaway Title</label>
+        <input class="form-input" id="gwTitle" placeholder="e.g. 67 Scrolls Nokia Giveaway">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Prize Details (optional)</label>
+        <textarea class="form-textarea" id="gwPrize" placeholder="Describe the prize..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Starts On</label>
+        <input class="form-input" type="datetime-local" id="gwStarts">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ends On</label>
+        <input class="form-input" type="datetime-local" id="gwEnds">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Number of Winners</label>
+        <input class="form-input" type="number" id="gwWinners" value="1" min="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Giveaway Channel</label>
+        <select class="form-select-input" id="gwChannel">
+          <option value="">Loading channels...</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('giveawayModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitGiveaway()"><i class="fas fa-save"></i> Save Giveaway</button>
+    </div>
   </div>
 </div>
 
@@ -1335,7 +1402,133 @@ function switchTab(tab) {
   if (tab === 'queue') renderQueue();
   if (tab === 'feedback') renderFeedback();
   if (tab === 'logs') renderLogs();
+  if (tab === 'giveaways') { loadGiveaways().catch(() => {}); renderGiveaways(); }
 }
+
+// ============================================================
+// Giveaways
+// ============================================================
+let giveaways = [];
+let giveawayFilter = 'active';
+let giveawayChannels = [];
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function formatCountdown(ms) {
+  if (ms <= 0) return '00:00:00:00';
+  const s = Math.floor(ms / 1000);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return `${pad2(d)}:${pad2(h)}:${pad2(m)}:${pad2(sec)}`;
+}
+
+function setGiveawayFilter(f, el) {
+  giveawayFilter = f;
+  document.querySelectorAll('[data-gfilter]').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderGiveaways();
+}
+
+function openGiveawayModal() {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  document.getElementById('gwStarts').value = local;
+  document.getElementById('gwEnds').value = local;
+  document.getElementById('gwTitle').value = '';
+  document.getElementById('gwPrize').value = '';
+  document.getElementById('gwWinners').value = '1';
+  openModal('giveawayModal');
+  if (typeof loadGiveawayChannels === 'function') loadGiveawayChannels().catch(() => {});
+}
+
+function renderGiveaways() {
+  const grid = document.getElementById('giveawayGrid');
+  if (!grid) return;
+
+  const q = (document.getElementById('giveawaySearch')?.value || '').toLowerCase();
+  let list = giveaways.filter(g => {
+    if (giveawayFilter === 'active') return g.status === 'active' || g.status === 'scheduled';
+    return g.status === 'ended' || g.status === 'cancelled';
+  });
+  if (q) list = list.filter(g => g.title.toLowerCase().includes(q) || (g.hostTag || '').toLowerCase().includes(q));
+
+  const badge = document.getElementById('giveawayCount');
+  const activeCount = giveaways.filter(g => g.status === 'active' || g.status === 'scheduled').length;
+  if (badge) {
+    badge.textContent = activeCount;
+    badge.style.display = activeCount > 0 ? '' : 'none';
+  }
+
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-gift"></i><p>No ${giveawayFilter} giveaways</p><span>${giveawayFilter === 'active' ? 'Create one to get started' : 'Ended giveaways will appear here'}</span></div>`;
+    return;
+  }
+
+  grid.innerHTML = list.map(g => {
+    const remaining = (g.endsAt || 0) - Date.now();
+    const isLive = g.status === 'active' || g.status === 'scheduled';
+    const timer = isLive ? formatCountdown(remaining) : (g.status === 'ended' ? 'Ended' : 'Cancelled');
+    const winnerText = g.winners?.length ? g.winners.map(w => w.tag).join(', ') : '';
+    const shareUrl = (typeof getApiBase === 'function' ? getApiBase() : location.origin) + '/giveaway/' + g.id;
+    return `
+    <div class="queue-card" data-gw-id="${g.id}">
+      <div class="queue-card-header">
+        <div style="flex:1">
+          <div style="font-weight:700;color:var(--text-primary);font-size:15px">${g.title}</div>
+          <div style="font-size:12px;color:var(--text-muted)">by ${g.hostTag || 'Unknown'}</div>
+        </div>
+        <span class="badge ${isLive ? 'badge-active' : 'badge-inactive'}" style="margin-left:auto">${g.status}</span>
+      </div>
+      ${g.prize ? `<div class="queue-card-body">${g.prize}</div>` : ''}
+      <div class="queue-card-meta">
+        <span style="color:var(--success);font-weight:700"><i class="fas fa-ticket"></i> ${g.entryCount || 0} Entries</span>
+        <span style="color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums" class="gw-timer" data-ends="${g.endsAt || 0}"><i class="fas fa-clock"></i> ${timer}</span>
+      </div>
+      ${winnerText ? `<div style="font-size:12px;color:var(--success);margin-bottom:12px">🏆 ${winnerText}</div>` : ''}
+      <div class="queue-card-actions">
+        <button class="btn btn-ghost btn-sm" onclick="viewGiveaway('${g.id}')" title="View"><i class="fas fa-eye"></i> View</button>
+        ${isLive ? `<button class="btn btn-warning btn-sm" onclick="endGiveaway('${g.id}')" title="End now"><i class="fas fa-flag-checkered"></i> End</button>` : ''}
+        ${g.status === 'ended' ? `<button class="btn btn-ghost btn-sm" onclick="rerollGiveaway('${g.id}')" title="Reroll"><i class="fas fa-dice"></i> Reroll</button>` : ''}
+        <button class="btn btn-danger btn-sm" onclick="deleteGiveaway('${g.id}')" title="Delete"><i class="fas fa-trash"></i></button>
+      </div>
+      <div style="margin-top:10px;font-size:11px;color:var(--text-muted);cursor:pointer" onclick="navigator.clipboard.writeText('${shareUrl}');showToast('Link copied!','success')">
+        <i class="fas fa-link"></i> ${shareUrl}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function viewGiveaway(id) {
+  const g = giveaways.find(x => x.id === id);
+  if (!g) return;
+  const shareUrl = (typeof getApiBase === 'function' ? getApiBase() : location.origin) + '/giveaway/' + g.id;
+  const entrants = g.entrants?.length ? g.entrants.map(e => e.tag).join(', ') : 'None yet';
+  document.getElementById('viewModalBody').innerHTML = `
+    <div class="detail-row"><span class="detail-label">Title</span><span class="detail-value">${g.title}</span></div>
+    <div class="detail-row"><span class="detail-label">Prize</span><span class="detail-value">${g.prize || '—'}</span></div>
+    <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value">${g.status}</span></div>
+    <div class="detail-row"><span class="detail-label">Entries</span><span class="detail-value">${g.entryCount || 0}</span></div>
+    <div class="detail-row"><span class="detail-label">Winners</span><span class="detail-value">${g.winnerCount || 1}</span></div>
+    <div class="detail-row"><span class="detail-label">Hosted by</span><span class="detail-value">${g.hostTag || '—'}</span></div>
+    <div class="detail-row"><span class="detail-label">Ends</span><span class="detail-value">${g.endsAt ? new Date(g.endsAt).toLocaleString() : '—'}</span></div>
+    <div class="detail-row"><span class="detail-label">Share link</span><span class="detail-value" style="font-size:11px;word-break:break-all">${shareUrl}</span></div>
+    <div class="detail-row"><span class="detail-label">Entrants</span><span class="detail-value" style="font-size:12px">${entrants}</span></div>
+  `;
+  document.getElementById('viewModalFooter').innerHTML = `
+    <button class="btn btn-ghost" onclick="closeModal('viewModal')">Close</button>
+    <button class="btn btn-primary" onclick="navigator.clipboard.writeText('${shareUrl}');showToast('Link copied!','success')"><i class="fas fa-copy"></i> Copy Link</button>
+  `;
+  openModal('viewModal');
+}
+
+setInterval(() => {
+  document.querySelectorAll('.gw-timer').forEach(el => {
+    const ends = parseInt(el.dataset.ends, 10);
+    if (ends) el.innerHTML = `<i class="fas fa-clock"></i> ${formatCountdown(ends - Date.now())}`;
+  });
+}, 1000);
 
 // ============================================================
 // 成员表格 —— 过滤、排序、搜索、分页

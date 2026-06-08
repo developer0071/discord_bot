@@ -22,7 +22,12 @@ const {
   getVotes,
   getUserProfile,
   saveUserProfile,
+  getGiveaway,
+  addGiveawayEntrant,
+  isGiveawayEntrant,
 } = require('../utils/firebase');
+
+const giveawayUtil = require('../utils/giveaway');
 
 const {
   assignRegimentRole,
@@ -187,6 +192,39 @@ async function handleTimeVote(interaction) {
   return interaction.editReply({ embeds: [successEmbed(`Your vote for **${option}** has been recorded. ✅`)] });
 }
 
+// ─── Giveaway entry ─────────────────────────────────────────────────────────
+async function handleGiveawayEnter(interaction) {
+  const giveawayId = interaction.customId.slice('giveaway_enter_'.length);
+  const giveaway = await getGiveaway(giveawayId);
+
+  if (!giveaway || giveaway.status !== 'active') {
+    return interaction.editReply({ embeds: [errorEmbed('This giveaway is no longer active.')] });
+  }
+
+  const endMs = giveawayUtil.endsAtMs(giveaway);
+  if (endMs && Date.now() >= endMs) {
+    return interaction.editReply({ embeds: [errorEmbed('This giveaway has already ended.')] });
+  }
+
+  const requiredRoles = giveaway.requiredRoleIds || [];
+  if (requiredRoles.length) {
+    const hasRole = requiredRoles.some((id) => interaction.member.roles.cache.has(id));
+    if (!hasRole) {
+      return interaction.editReply({ embeds: [errorEmbed("You don't have the required role to enter this giveaway.")] });
+    }
+  }
+
+  if (await isGiveawayEntrant(giveawayId, interaction.user.id)) {
+    return interaction.editReply({ embeds: [errorEmbed("You've already entered this giveaway!")] });
+  }
+
+  await addGiveawayEntrant(giveawayId, interaction.user.id, interaction.user.tag);
+  const updated = await getGiveaway(giveawayId);
+  await giveawayUtil.refreshMessage(interaction.client, updated);
+
+  return interaction.editReply({ embeds: [successEmbed(`You're in! 🎉 **${giveaway.title}** — good luck!`)] });
+}
+
 // ─── Router ─────────────────────────────────────────────────────────────────
 const handlers = {
   regiment_queue: handleViewQueue,
@@ -198,6 +236,12 @@ const handlers = {
 const infoSections = Object.fromEntries(info.sections.map((s) => [s.id, s]));
 
 async function handleButton(interaction) {
+  // ── Giveaway entry (Firestore + message edit → defer first) ──
+  if (interaction.customId.startsWith('giveaway_enter_')) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    return handleGiveawayEnter(interaction);
+  }
+
   // ── Time-vote buttons (Firestore + message edit → defer first) ──
   if (interaction.customId.startsWith('tvote_')) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });

@@ -15,6 +15,7 @@ const messageCreate     = require('./events/messageCreate');
 const { handleButton, handleJoinModal, handleJoinFamilies } = require('./events/buttons');
 const verification      = require('./events/verification');
 const { startWebServer } = require('./web/server');
+const { startGiveawayScheduler } = require('./utils/giveaway');
 const commands          = require('./commands/index');
 
 // ─── Client Setup ─────────────────────────────────────────────────────────────
@@ -40,6 +41,7 @@ client.once('clientReady', async () => {
   console.log(`📡 Serving ${client.guilds.cache.size} guild(s)\n`);
   await registerSlashCommands();
   startWebServer(client);
+  startGiveawayScheduler(client);
 });
 
 client.on('guildMemberAdd',    member => guildMemberAdd.execute(member));

@@ -10,7 +10,7 @@
   // ⚠️ If your Cloudflare tunnel URL changes (it does on restart unless it's a
   // named tunnel), update this one line and redeploy. A localStorage override
   // via setBackend('https://...') also works without redeploying.
-  const DEFAULT_API_BASE = 'https://component-yen-historical-socket.trycloudflare.com';
+  const DEFAULT_API_BASE = 'https://api.hunterstar.online';
 
   function getApiBase() {
     return (localStorage.getItem('dash_api') || DEFAULT_API_BASE).replace(/\/+$/, '');
@@ -50,6 +50,7 @@
     return res.json();
   }
   window.api = api;
+  window.getApiBase = getApiBase;
   // Console helpers to reconfigure: setBackend('https://...'), then reload.
   window.setBackend = (url) => { localStorage.setItem('dash_api', (url || '').replace(/\/+$/, '')); location.reload(); };
 
@@ -132,8 +133,103 @@
     if (active('queue') && typeof renderQueue === 'function') renderQueue();
     if (active('logs') && typeof renderLogs === 'function') renderLogs();
     if (active('feedback') && typeof renderFeedback === 'function') renderFeedback();
+    if (active('giveaways')) { await loadGiveaways().catch(() => {}); if (typeof renderGiveaways === 'function') renderGiveaways(); }
   }
   window.loadData = loadData;
+
+  window.loadGiveaways = async function () {
+    const data = await api('GET', '/api/giveaways');
+    if (typeof giveaways !== 'undefined') {
+      giveaways.length = 0;
+      (data.giveaways || []).forEach((g) => giveaways.push(g));
+    }
+    if (typeof renderGiveaways === 'function') renderGiveaways();
+  };
+
+  window.loadGiveawayChannels = async function () {
+    const data = await api('GET', '/api/channels');
+    giveawayChannels = data.channels || [];
+    const sel = document.getElementById('gwChannel');
+    if (!sel) return;
+    sel.innerHTML = giveawayChannels.map((c) =>
+      `<option value="${c.id}">${c.parent ? c.parent + ' / ' : ''}#${c.name}</option>`
+    ).join('');
+    const def = data.defaultChannelId;
+    if (def && giveawayChannels.some((c) => c.id === def)) sel.value = def;
+    else if (giveawayChannels.length) sel.value = giveawayChannels[0].id;
+  };
+
+  window.viewGiveaway = async function (id) {
+    try {
+      const g = await api('GET', '/api/giveaways/' + id);
+      const shareUrl = getApiBase() + '/giveaway/' + g.id;
+      const entrants = (g.entrants || []).map((e) => e.tag).join(', ') || 'None yet';
+      const winners = (g.winners || []).map((w) => w.tag).join(', ') || '—';
+      document.getElementById('viewModalBody').innerHTML =
+        '<div class="detail-row"><span class="detail-label">Title</span><span class="detail-value">' + g.title + '</span></div>' +
+        '<div class="detail-row"><span class="detail-label">Prize</span><span class="detail-value">' + (g.prize || '—') + '</span></div>' +
+        '<div class="detail-row"><span class="detail-label">Status</span><span class="detail-value">' + g.status + '</span></div>' +
+        '<div class="detail-row"><span class="detail-label">Entries</span><span class="detail-value">' + (g.entryCount || 0) + '</span></div>' +
+        '<div class="detail-row"><span class="detail-label">Winners picked</span><span class="detail-value">' + winners + '</span></div>' +
+        '<div class="detail-row"><span class="detail-label">Hosted by</span><span class="detail-value">' + (g.hostTag || '—') + '</span></div>' +
+        '<div class="detail-row"><span class="detail-label">Ends</span><span class="detail-value">' + (g.endsAt ? new Date(g.endsAt).toLocaleString() : '—') + '</span></div>' +
+        '<div class="detail-row"><span class="detail-label">Share link</span><span class="detail-value" style="font-size:11px;word-break:break-all">' + shareUrl + '</span></div>' +
+        '<div class="detail-row"><span class="detail-label">Entrants</span><span class="detail-value" style="font-size:12px">' + entrants + '</span></div>';
+      document.getElementById('viewModalFooter').innerHTML =
+        '<button class="btn btn-ghost" onclick="closeModal(\'viewModal\')">Close</button>' +
+        '<button class="btn btn-primary" onclick="navigator.clipboard.writeText(\'' + shareUrl + '\');showToast(\'Link copied!\',\'success\')"><i class="fas fa-copy"></i> Copy Link</button>';
+      openModal('viewModal');
+    } catch (e) { showToast('Load failed: ' + e.message, 'error'); }
+  };
+
+  window.submitGiveaway = async function () {
+    const title = document.getElementById('gwTitle')?.value?.trim();
+    const prize = document.getElementById('gwPrize')?.value?.trim();
+    const startsAt = document.getElementById('gwStarts')?.value;
+    const endsAt = document.getElementById('gwEnds')?.value;
+    const winnerCount = document.getElementById('gwWinners')?.value;
+    const channelId = document.getElementById('gwChannel')?.value;
+    if (!title) { showToast('Title is required', 'error'); return; }
+    if (!endsAt) { showToast('End time is required', 'error'); return; }
+    try {
+      const r = await api('POST', '/api/giveaways', {
+        title, prize, startsAt, endsAt, winnerCount, channelId,
+      });
+      showToast('Giveaway created!', 'success');
+      closeModal('giveawayModal');
+      await loadGiveaways();
+      if (typeof switchTab === 'function') switchTab('giveaways');
+    } catch (e) { showToast('Create failed: ' + e.message, 'error'); }
+  };
+
+  window.endGiveaway = async function (id) {
+    if (!confirm('End this giveaway now and pick winners?')) return;
+    try {
+      const r = await api('POST', '/api/giveaways/' + id + '/end');
+      const names = (r.winners || []).map((w) => w.tag).join(', ') || 'none';
+      showToast('Ended — winners: ' + names, 'success');
+      await loadGiveaways();
+    } catch (e) { showToast('End failed: ' + e.message, 'error'); }
+  };
+
+  window.rerollGiveaway = async function (id) {
+    if (!confirm('Reroll winners for this giveaway?')) return;
+    try {
+      const r = await api('POST', '/api/giveaways/' + id + '/reroll');
+      const names = (r.winners || []).map((w) => w.tag).join(', ') || 'none';
+      showToast('Rerolled — winners: ' + names, 'success');
+      await loadGiveaways();
+    } catch (e) { showToast('Reroll failed: ' + e.message, 'error'); }
+  };
+
+  window.deleteGiveaway = async function (id) {
+    if (!confirm('Delete this giveaway? This cannot be undone.')) return;
+    try {
+      await api('DELETE', '/api/giveaways/' + id);
+      showToast('Giveaway deleted', 'warning');
+      await loadGiveaways();
+    } catch (e) { showToast('Delete failed: ' + e.message, 'error'); }
+  };
 
   window.saveSettings = async function () {
     const val = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
@@ -232,7 +328,13 @@
     try { await loadData(); hideLoginOverlay(); injectLogoutButton(); }
     catch (e) { if (e.message !== 'Not authenticated') showToast('Load failed: ' + e.message, 'error'); }
   })();
-  setInterval(() => { if (getToken()) loadData().catch(() => {}); }, 30000);
+  setInterval(() => {
+    if (!getToken()) return;
+    loadData().catch(() => {});
+    if (typeof giveaways !== 'undefined' && document.getElementById('tab-giveaways')?.classList.contains('active')) {
+      loadGiveaways().catch(() => {});
+    }
+  }, 30000);
 
   // Small logout control (kept here so no edits to index.html are needed).
   function injectLogoutButton() {

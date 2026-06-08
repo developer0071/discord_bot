@@ -250,6 +250,67 @@ async function saveDashboardSettings(data) {
   await db.collection('config').doc('dashboard').set(data, { merge: true });
 }
 
+// ─── Giveaways ────────────────────────────────────────────────────────────────
+
+async function createGiveaway(id, data) {
+  await db.collection('giveaways').doc(id).set({
+    ...data,
+    entrants: {},
+    winners: [],
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return id;
+}
+
+async function getGiveaway(id) {
+  const doc = await db.collection('giveaways').doc(id).get();
+  return doc.exists ? { id: doc.id, ...doc.data() } : null;
+}
+
+async function getAllGiveaways() {
+  const snapshot = await db.collection('giveaways').orderBy('createdAt', 'desc').get();
+  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+}
+
+async function getGiveawaysByStatus(status) {
+  const snapshot = await db.collection('giveaways').where('status', '==', status).get();
+  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+}
+
+async function updateGiveaway(id, data) {
+  await db.collection('giveaways').doc(id).set(data, { merge: true });
+}
+
+async function deleteGiveaway(id) {
+  await db.collection('giveaways').doc(id).delete();
+}
+
+async function addGiveawayEntrant(giveawayId, userId, tag) {
+  await db.collection('giveaways').doc(giveawayId).set(
+    {
+      entrants: {
+        [userId]: {
+          tag,
+          enteredAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      },
+    },
+    { merge: true },
+  );
+}
+
+async function removeGiveawayEntrant(giveawayId, userId) {
+  await db.collection('giveaways').doc(giveawayId).update({
+    [`entrants.${userId}`]: admin.firestore.FieldValue.delete(),
+  });
+}
+
+async function isGiveawayEntrant(giveawayId, userId) {
+  const doc = await db.collection('giveaways').doc(giveawayId).get();
+  if (!doc.exists) return false;
+  return !!(doc.data().entrants || {})[userId];
+}
+
 // ─── Polls (time votes) ───────────────────────────────────────────────────────
 
 /**
@@ -293,4 +354,13 @@ module.exports = {
   getLogs,
   getDashboardSettings,
   saveDashboardSettings,
+  createGiveaway,
+  getGiveaway,
+  getAllGiveaways,
+  getGiveawaysByStatus,
+  updateGiveaway,
+  deleteGiveaway,
+  addGiveawayEntrant,
+  removeGiveawayEntrant,
+  isGiveawayEntrant,
 };
