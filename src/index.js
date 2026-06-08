@@ -48,14 +48,37 @@ client.on('guildMemberAdd',    member => guildMemberAdd.execute(member));
 client.on('guildMemberRemove', member => guildMemberRemove.execute(member));
 client.on('messageCreate',     message => messageCreate.execute(message));
 
+const { RateLimiter } = require('./utils/ratelimit');
+
+// Per-user rate limits for interactions (prevents spam / DDoS of Firestore)
+const cmdLimiter    = new RateLimiter(5, 10_000);  // 5 slash commands per 10s
+const buttonLimiter = new RateLimiter(8, 10_000);  // 8 button clicks per 10s
+
 client.on('interactionCreate', async interaction => {
   try {
+    // ── Per-user rate limiting ──
+    const userId = interaction.user.id;
+
     if (interaction.isChatInputCommand()) {
+      if (cmdLimiter.isLimited(userId)) {
+        return interaction.reply({
+          content: '⏳ Slow down! You\'re using commands too fast.',
+          flags: MessageFlags.Ephemeral,
+        }).catch(() => {});
+      }
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
       await command.execute(interaction);
+
     } else if (interaction.isButton()) {
+      if (buttonLimiter.isLimited(userId)) {
+        return interaction.reply({
+          content: '⏳ Slow down! You\'re clicking buttons too fast.',
+          flags: MessageFlags.Ephemeral,
+        }).catch(() => {});
+      }
       await handleButton(interaction);
+
     } else if (interaction.isModalSubmit()) {
       if (interaction.customId === 'verify_modal') await verification.handleVerifyModal(interaction);
       else if (interaction.customId === 'join_modal') await handleJoinModal(interaction);

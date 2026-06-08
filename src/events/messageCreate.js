@@ -1,4 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
+const vip = require('../config/vipServers');
 
 // ─── Regiment join detection ─────────────────────────────────────────────────
 // Fires when a message mentions the regiment. Word boundaries keep it from
@@ -9,9 +10,28 @@ function mentionsRegiment(content) {
   return REGIMENT_PATTERN.test(content);
 }
 
-// ─── Per-user cooldowns ──────────────────────────────────────────────────────
-const COOLDOWN_MS = 60 * 1000;
+// ─── Private server trigger ──────────────────────────────────────────────────
+// Only matches "private server" or "private-server" (case-insensitive).
+// Intentionally narrow — avoids the old triggers ("vip", "ps") that fired on
+// every other message.
+const PS_PATTERN = /\bprivate[\s-]?server\b/i;
+
+function matchesPrivateServer(content) {
+  return PS_PATTERN.test(content);
+}
+
+function vipEmbed() {
+  const lines = vip.servers.length
+    ? vip.servers.map((s) => `**${s.name}** — \`${s.code}\``).join('\n')
+    : '_No codes have been set yet._';
+  return new EmbedBuilder().setColor(vip.color || 0x9b59b6).setTitle(vip.title).setDescription(lines);
+}
+
+// ─── Cooldowns ───────────────────────────────────────────────────────────────
+const COOLDOWN_MS = 60 * 1000;              // per-user: 1 min for regiment
+const PS_COOLDOWN_MS = 5 * 60 * 1000;       // GLOBAL: 5 min for private-server codes
 const regimentCooldown = new Map();
+let lastPsSentAt = 0;                        // global timestamp — not per-user
 
 function onCooldown(map, userId, ms = COOLDOWN_MS) {
   const now = Date.now();
@@ -34,6 +54,20 @@ module.exports = {
 
     const content = message.content;
 
+    // ── Private server codes (global 5-min cooldown) ──
+    if (matchesPrivateServer(content)) {
+      const now = Date.now();
+      if (now - lastPsSentAt < PS_COOLDOWN_MS) return; // still on cooldown — silently ignore
+      lastPsSentAt = now;
+      try {
+        await message.reply({ embeds: [vipEmbed()] });
+        console.log(`[PS] Sent server codes (triggered by ${message.author.tag})`);
+      } catch (err) {
+        console.error('[messageCreate] PS reply failed:', err);
+      }
+      return;
+    }
+
     // ── Regiment join question ──
     if (mentionsRegiment(content)) {
       if (onCooldown(regimentCooldown, message.author.id)) return;
@@ -53,4 +87,5 @@ module.exports = {
 
   // Exported for testing.
   mentionsRegiment,
+  matchesPrivateServer,
 };

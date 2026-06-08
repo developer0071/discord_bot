@@ -7,6 +7,7 @@ const { canAccessDashboard, canManage } = require('../utils/permissions');
 const { assignRegimentRole, removeRegimentRole } = require('../utils/helpers');
 const { promoteFromQueue } = require('../events/guildMemberRemove');
 const giveawayUtil = require('../utils/giveaway');
+const { RateLimiter } = require('../utils/ratelimit');
 
 // Firestore Timestamp → epoch ms (or null).
 function tsToMs(ts) {
@@ -23,7 +24,9 @@ function startWebServer(client) {
   const port = parseInt(process.env.DASHBOARD_PORT, 10) || 3000;
 
   const app = express();
-  app.use(express.json());
+
+  // ── Body size limit (prevent oversized payloads) ──
+  app.use(express.json({ limit: '50kb' }));
 
   // CORS — lets the Vercel-hosted frontend call this API. Auth is via Bearer
   // password (not cookies), so a wildcard origin is safe. Lock it down with
@@ -35,6 +38,55 @@ function startWebServer(client) {
     if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
   });
+
+  // ── HTTP rate limiting (per IP) ──
+  const apiReadLimiter  = new RateLimiter(30, 60_000); // 30 reads per minute
+  const apiWriteLimiter = new RateLimiter(10, 60_000); // 10 writes per minute
+
+  function getClientIp(req) {
+    return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
+  }
+
+  // Rate-limit middleware for read endpoints
+  function rlRead(req, res, next) {
+    const ip = getClientIp(req);
+    if (apiReadLimiter.isLimited(ip)) {
+      const retry = apiReadLimiter.retryAfterSec(ip);
+      res.set('Retry-After', String(retry));
+      return res.status(429).json({ error: 'Too many requests — slow down', retryAfter: retry });
+    }
+    next();
+  }
+
+  // Rate-limit middleware for write/mutation endpoints
+  function rlWrite(req, res, next) {
+    const ip = getClientIp(req);
+    if (apiWriteLimiter.isLimited(ip)) {
+      const retry = apiWriteLimiter.retryAfterSec(ip);
+      res.set('Retry-After', String(retry));
+      return res.status(429).json({ error: 'Too many requests — slow down', retryAfter: retry });
+    }
+    next();
+  }
+
+  // ── Concurrent request guard (prevents Firestore overload from stacked requests) ──
+  let activeRequests = 0;
+  const MAX_CONCURRENT = 10;
+
+  function concurrencyGuard(req, res, next) {
+    if (activeRequests >= MAX_CONCURRENT) {
+      return res.status(503).json({ error: 'Server is busy — try again in a moment' });
+    }
+    activeRequests++;
+    let counted = true;
+    const done = () => { if (counted) { counted = false; activeRequests = Math.max(0, activeRequests - 1); } };
+    res.on('finish', done);
+    res.on('close', done);
+    next();
+  }
+
+  // Apply concurrency guard and read rate-limit to all /api routes
+  app.use('/api', concurrencyGuard);
 
   const rootDir = path.join(__dirname, '..', '..');
   const guild = () => client.guilds.cache.first();
@@ -215,7 +267,7 @@ load();
   let dataCacheTime = 0;
   const DATA_CACHE_TTL = 60_000; // 60 seconds
 
-  app.get('/api/data', async (req, res) => {
+  app.get('/api/data', rlRead, async (req, res) => {
     try {
       const now = Date.now();
       if (dataCache && (now - dataCacheTime) < DATA_CACHE_TTL) {
@@ -261,7 +313,7 @@ load();
   });
 
   // ── Accept a specific user from the queue (assign role, record member) ──
-  app.post('/api/accept', async (req, res) => {
+  app.post('/api/accept', rlWrite, async (req, res) => {
     try {
       const { userId } = req.body;
       const member = await fetchMember(userId);
@@ -275,7 +327,7 @@ load();
   });
 
   // ── Reject (remove) a user from the queue ──
-  app.post('/api/reject', async (req, res) => {
+  app.post('/api/reject', rlWrite, async (req, res) => {
     try {
       const member = await fetchMember(req.body.userId);
       await fb.removeFromQueue(req.body.userId);
@@ -285,7 +337,7 @@ load();
   });
 
   // ── Kick a member from the regiment ──
-  app.post('/api/kick', async (req, res) => {
+  app.post('/api/kick', rlWrite, async (req, res) => {
     try {
       const { userId } = req.body;
       const member = await fetchMember(userId);
@@ -297,7 +349,7 @@ load();
   });
 
   // ── Add a member: by userId, or resolve by exact Discord username ──
-  app.post('/api/add', async (req, res) => {
+  app.post('/api/add', rlWrite, async (req, res) => {
     try {
       let { userId, username, roblox } = req.body;
       let member = userId ? await fetchMember(userId) : null;
@@ -321,7 +373,7 @@ load();
   });
 
   // ── Update a member's saved profile (e.g. Roblox username) ──
-  app.post('/api/update', async (req, res) => {
+  app.post('/api/update', rlWrite, async (req, res) => {
     try {
       const { userId, roblox } = req.body;
       if (!userId) return res.status(400).json({ error: 'userId required' });
@@ -331,7 +383,7 @@ load();
   });
 
   // ── Promote the next person in the queue ──
-  app.post('/api/promote', async (req, res) => {
+  app.post('/api/promote', rlWrite, async (req, res) => {
     try {
       await promoteFromQueue(guild());
       log('QUEUE_ACCEPTED', 'Next in queue', 'Promoted next from queue');
@@ -340,14 +392,14 @@ load();
   });
 
   // ── Change max slots (auto-promotes if increased) ──
-  app.post('/api/setslots', async (req, res) => {
+  app.post('/api/setslots', rlWrite, async (req, res) => {
     try {
       const newMax = parseInt(req.body.slots, 10);
-      if (!Number.isInteger(newMax) || newMax < 0) return res.status(400).json({ error: 'invalid slots' });
+      if (!Number.isInteger(newMax) || newMax < 0 || newMax > 500) return res.status(400).json({ error: 'invalid slots (0-500)' });
       await fb.getRegimentStatus(); // ensure config doc exists
       await fb.setMaxSlots(newMax);
       const status = await fb.getRegimentStatus();
-      const toFill = newMax - status.currentCount;
+      const toFill = Math.min(newMax - status.currentCount, 50); // cap at 50 promotions per call
       for (let i = 0; i < toFill; i++) await promoteFromQueue(guild());
       log('SETTINGS_CHANGED', 'System', `Max slots set to ${newMax}`);
       res.json({ ok: true });
@@ -355,7 +407,7 @@ load();
   });
 
   // ── Giveaways (dashboard-only management) ──
-  app.get('/api/channels', async (req, res) => {
+  app.get('/api/channels', rlRead, async (req, res) => {
     try {
       const g = guild();
       if (!g) return res.json({ channels: [] });
@@ -368,7 +420,7 @@ load();
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  app.get('/api/giveaways', async (req, res) => {
+  app.get('/api/giveaways', rlRead, async (req, res) => {
     try {
       const list = await fb.getAllGiveaways();
       res.json({
@@ -392,14 +444,14 @@ load();
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  app.get('/api/giveaways/:id/me', async (req, res) => {
+  app.get('/api/giveaways/:id/me', rlRead, async (req, res) => {
     try {
       const entered = await fb.isGiveawayEntrant(req.params.id, req.user.id);
       res.json({ entered });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  app.get('/api/giveaways/:id', async (req, res) => {
+  app.get('/api/giveaways/:id', rlRead, async (req, res) => {
     try {
       const g = await fb.getGiveaway(req.params.id);
       if (!g) return res.status(404).json({ error: 'Giveaway not found' });
@@ -415,7 +467,7 @@ load();
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  app.post('/api/giveaways/:id/enter', async (req, res) => {
+  app.post('/api/giveaways/:id/enter', rlWrite, async (req, res) => {
     try {
       const member = await fetchMember(req.user.id);
       if (!member) return res.status(403).json({ error: 'You must be in the server to enter' });
@@ -442,7 +494,7 @@ load();
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
 
-  app.post('/api/giveaways/:id/leave', async (req, res) => {
+  app.post('/api/giveaways/:id/leave', rlWrite, async (req, res) => {
     try {
       const g = await fb.getGiveaway(req.params.id);
       if (!g || g.status !== 'active') return res.status(400).json({ error: 'Giveaway is not active' });
@@ -461,9 +513,8 @@ load();
       const { title, prize, startsAt, endsAt, winnerCount, channelId, requiredRoleIds } = req.body;
       if (!title?.trim()) return res.status(400).json({ error: 'Title is required' });
 
-      const startMs = startsAt ? new Date(startsAt).getTime() : Date.now();
       const endMs = endsAt ? new Date(endsAt).getTime() : null;
-      if (!endMs || endMs <= startMs) return res.status(400).json({ error: 'End time must be after start time' });
+      if (!endMs || endMs <= Date.now()) return res.status(400).json({ error: 'End time must be in the future' });
 
       const winners = parseInt(winnerCount, 10) || 1;
       if (winners < 1) return res.status(400).json({ error: 'At least 1 winner required' });
@@ -472,27 +523,23 @@ load();
       if (!ch) return res.status(400).json({ error: 'No giveaway channel selected' });
 
       const id = giveawayUtil.generateId();
-      const now = Date.now();
-      const status = startMs <= now ? 'active' : 'scheduled';
 
       const data = {
         title: title.trim(),
         prize: (prize || '').trim(),
-        startsAt: new Date(startMs),
+        startsAt: new Date(),
         endsAt: new Date(endMs),
         winnerCount: winners,
         channelId: ch,
         hostId: req.user.id,
         hostTag: req.user.tag,
-        status,
+        status: 'active', // always post immediately
         requiredRoleIds: Array.isArray(requiredRoleIds) ? requiredRoleIds : [],
       };
 
       await fb.createGiveaway(id, data);
-
-      if (status === 'active') {
-        await giveawayUtil.postGiveaway(client, { id, ...data });
-      }
+      // Always post to Discord immediately so users can see and enter
+      await giveawayUtil.postGiveaway(client, { id, ...data });
 
       log('GIVEAWAY_CREATED', req.user.tag, `Created "${title.trim()}" (${id})`);
       res.json({ ok: true, id });
@@ -563,15 +610,15 @@ load();
   });
 
   // ── Save dashboard settings (max size + cosmetic prefs) ──
-  app.post('/api/settings', async (req, res) => {
+  app.post('/api/settings', rlWrite, async (req, res) => {
     try {
       const { name, maxSize, autoAccept, kickReason } = req.body;
       const max = parseInt(maxSize, 10);
-      if (Number.isInteger(max) && max >= 0) {
+      if (Number.isInteger(max) && max >= 0 && max <= 500) {
         await fb.getRegimentStatus();
         await fb.setMaxSlots(max);
         const status = await fb.getRegimentStatus();
-        const toFill = max - status.currentCount;
+        const toFill = Math.min(max - status.currentCount, 50); // cap at 50 promotions per call
         for (let i = 0; i < toFill; i++) await promoteFromQueue(guild());
       }
       await fb.saveDashboardSettings({

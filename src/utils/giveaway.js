@@ -223,8 +223,15 @@ function startGiveawayScheduler(client) {
   const MAX_INTERVAL = 15 * 60_000;  // 15 minutes max backoff
   let currentInterval = BASE_INTERVAL;
   let timerId = null;
+  let running = false; // guard against overlapping ticks
 
   const tick = async () => {
+    if (running) {
+      console.warn('[giveaway] Previous tick still running — skipping');
+      timerId = setTimeout(tick, currentInterval);
+      return;
+    }
+    running = true;
     try {
       await activateScheduled(client);
       await endExpired(client);
@@ -235,6 +242,8 @@ function startGiveawayScheduler(client) {
         currentInterval = Math.min(currentInterval * 2, MAX_INTERVAL);
         console.warn(`[giveaway] Quota exhausted — backing off to ${currentInterval / 60000}m`);
       }
+    } finally {
+      running = false;
     }
     timerId = setTimeout(tick, currentInterval);
   };

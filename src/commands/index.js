@@ -196,8 +196,8 @@ const setSlotsCommand = {
 
     const status = await getRegimentStatus();
 
-    // If new max is higher than current count, auto-promote from queue
-    const slotsToFill = newMax - status.currentCount;
+    // If new max is higher than current count, auto-promote from queue (max 50 per call)
+    const slotsToFill = Math.min(newMax - status.currentCount, 50);
     if (slotsToFill > 0) {
       for (let i = 0; i < slotsToFill; i++) {
         await promoteFromQueue(interaction.guild);
@@ -545,7 +545,7 @@ const psCommand = {
       .setTitle(vip.title)
       .setDescription(lines);
 
-    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    await interaction.reply({ embeds: [embed] });
   },
 };
 

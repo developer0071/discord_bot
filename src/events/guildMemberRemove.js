@@ -52,43 +52,52 @@ module.exports = {
 /**
  * Promote the next person in the queue to the regiment.
  * Called whenever a slot opens up (member leaves).
+ *
+ * Uses a loop with a hard cap (MAX_STALE_RETRIES) instead of recursion to
+ * prevent infinite loops when many stale queue entries exist.
  */
+const MAX_STALE_RETRIES = 50;
+
 async function promoteFromQueue(guild) {
-  const next = await getNextInQueue();
-  if (!next) {
-    console.log('[QUEUE] No one in queue to promote');
-    return;
-  }
+  for (let attempt = 0; attempt < MAX_STALE_RETRIES; attempt++) {
+    const next = await getNextInQueue();
+    if (!next) {
+      console.log('[QUEUE] No one in queue to promote');
+      return;
+    }
 
-  // Fetch the guild member object
-  let nextMember;
-  try {
-    nextMember = await guild.members.fetch(next.userId);
-  } catch {
-    // User is no longer in the server — remove stale queue entry and try again
-    console.log(`[QUEUE] ${next.username} no longer in server, removing stale entry`);
+    // Fetch the guild member object
+    let nextMember;
+    try {
+      nextMember = await guild.members.fetch(next.userId);
+    } catch {
+      // User is no longer in the server — remove stale queue entry and try next
+      console.log(`[QUEUE] ${next.username} no longer in server, removing stale entry (attempt ${attempt + 1})`);
+      await removeFromQueue(next.userId);
+      continue; // try next person in queue (no recursion)
+    }
+
+    // Assign role and record in DB
+    await assignRegimentRole(nextMember);
     await removeFromQueue(next.userId);
-    await promoteFromQueue(guild); // recurse to try next person
-    return;
+    await addMember(next.userId, nextMember.user.tag);
+
+    const status = await getRegimentStatus();
+    console.log(`[PROMOTE] ${nextMember.user.tag} promoted from queue (${status.currentCount}/${status.maxSlots})`);
+
+    // Notify the promoted user
+    try {
+      await nextMember.send({ embeds: [promotedEmbed(nextMember)] });
+    } catch {
+      await sendWelcomeMessage(guild, nextMember, promotedEmbed(nextMember));
+    }
+
+    // Notify admins
+    await notifyAdmins(guild, adminNotifyEmbed(nextMember, 'joined'));
+    return; // done — promoted one person
   }
 
-  // Assign role and record in DB
-  await assignRegimentRole(nextMember);
-  await removeFromQueue(next.userId);
-  await addMember(next.userId, nextMember.user.tag);
-
-  const status = await getRegimentStatus();
-  console.log(`[PROMOTE] ${nextMember.user.tag} promoted from queue (${status.currentCount}/${status.maxSlots})`);
-
-  // Notify the promoted user
-  try {
-    await nextMember.send({ embeds: [promotedEmbed(nextMember)] });
-  } catch {
-    await sendWelcomeMessage(guild, nextMember, promotedEmbed(nextMember));
-  }
-
-  // Notify admins
-  await notifyAdmins(guild, adminNotifyEmbed(nextMember, 'joined'));
+  console.warn(`[QUEUE] Hit stale-entry limit (${MAX_STALE_RETRIES}), aborting promote`);
 }
 
 module.exports.promoteFromQueue = promoteFromQueue;
