@@ -334,7 +334,7 @@
     if (typeof giveaways !== 'undefined' && document.getElementById('tab-giveaways')?.classList.contains('active')) {
       loadGiveaways().catch(() => {});
     }
-  }, 30000);
+  }, 120000); // 2 minutes (was 30s)
 
   // Small logout control (kept here so no edits to index.html are needed).
   function injectLogoutButton() {

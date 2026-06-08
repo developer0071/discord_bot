@@ -210,15 +210,24 @@ load();
     next();
   }
 
-  // ── Data ──
+  // ── Data (with server-side cache to reduce Firestore reads) ──
+  let dataCache = null;
+  let dataCacheTime = 0;
+  const DATA_CACHE_TTL = 60_000; // 60 seconds
+
   app.get('/api/data', async (req, res) => {
     try {
+      const now = Date.now();
+      if (dataCache && (now - dataCacheTime) < DATA_CACHE_TTL) {
+        return res.json(dataCache);
+      }
+
       const [status, members, queue, users, logs, settings] = await Promise.all([
         fb.getRegimentStatus(), fb.getAllMembers(), fb.getFullQueue(),
         fb.getAllUsers(), fb.getLogs(50), fb.getDashboardSettings(),
       ]);
       const profile = Object.fromEntries(users.map((u) => [u.discordId || u.userId, u]));
-      res.json({
+      const result = {
         status,
         settings,
         members: members.map((m) => ({
@@ -240,7 +249,11 @@ load();
         feedback: users
           .filter((u) => u.feedback)
           .map((u) => ({ author: u.discordTag || u.discordId, text: u.feedback, date: tsToMs(u.verifiedAt) || Date.now() })),
-      });
+      };
+
+      dataCache = result;
+      dataCacheTime = now;
+      res.json(result);
     } catch (e) {
       console.error('[web] /api/data:', e);
       res.status(500).json({ error: e.message });

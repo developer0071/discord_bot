@@ -108,7 +108,7 @@ export function AppProvider({ children }) {
     loadData().catch(() => {});
     const interval = setInterval(() => {
       if (getToken()) loadData().catch(() => {});
-    }, 30000);
+    }, 120000); // 2 minutes (was 30s) — server caches for 60s anyway
     return () => clearInterval(interval);
   }, [authenticated, loadData]);
 

@@ -219,18 +219,29 @@ async function endExpired(client) {
 }
 
 function startGiveawayScheduler(client) {
+  const BASE_INTERVAL = 5 * 60_000;  // 5 minutes (was 30s)
+  const MAX_INTERVAL = 15 * 60_000;  // 15 minutes max backoff
+  let currentInterval = BASE_INTERVAL;
+  let timerId = null;
+
   const tick = async () => {
     try {
       await activateScheduled(client);
       await endExpired(client);
+      currentInterval = BASE_INTERVAL; // reset on success
     } catch (err) {
       console.error('[giveaway] scheduler tick:', err.message);
+      if (err.message.includes('RESOURCE_EXHAUSTED') || err.message.includes('Quota')) {
+        currentInterval = Math.min(currentInterval * 2, MAX_INTERVAL);
+        console.warn(`[giveaway] Quota exhausted — backing off to ${currentInterval / 60000}m`);
+      }
     }
+    timerId = setTimeout(tick, currentInterval);
   };
 
-  tick();
-  const interval = setInterval(tick, 30_000);
-  return () => clearInterval(interval);
+  // Delay first tick by 10s to let the bot fully initialise
+  timerId = setTimeout(tick, 10_000);
+  return () => clearTimeout(timerId);
 }
 
 module.exports = {
