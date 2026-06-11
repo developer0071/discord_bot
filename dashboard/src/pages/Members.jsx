@@ -8,7 +8,7 @@ import './Members.css';
 const PAGE_SIZE = 8;
 
 export default function Members({ searchQuery }) {
-  const { members, kickMember, addMember, updateMember, reinstateMember, bulkKick, showToast } = useApp();
+  const { members, kickMember, addMember, updateMember, reinstateMember, bulkKick, showToast, isMod } = useApp();
 
   // ── Local state ──
   const [filter, setFilter] = useState('all');
@@ -187,7 +187,7 @@ export default function Members({ searchQuery }) {
       <div className="page-title-row">
         <div>
           <h1 className="page-title">Regiment Members</h1>
-          <div className="page-subtitle">Manage all members currently in the regiment</div>
+          <div className="page-subtitle">{isMod ? 'Manage all members currently in the regiment' : 'View regiment members (read-only)'}</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-ghost btn-sm" onClick={handleExportCSV}><i className="fas fa-download" /> Export CSV</button>
@@ -221,7 +221,7 @@ export default function Members({ searchQuery }) {
       {/* Table */}
       <div className="table-wrapper">
         {/* Bulk bar */}
-        {selected.size > 0 && (
+        {isMod && selected.size > 0 && (
           <div className="bulk-bar visible">
             <span>{selected.size} selected</span>
             <button className="btn btn-danger btn-sm" onClick={handleBulkKick}><i className="fas fa-user-slash" /> Kick Selected</button>
@@ -233,27 +233,31 @@ export default function Members({ searchQuery }) {
           <table>
             <thead>
               <tr>
-                <th style={{ width: 40, paddingLeft: 16 }}>
-                  <div className={`custom-check${pageItems.length && pageItems.every(m => selected.has(m.id)) ? ' checked' : ''}`} onClick={toggleSelectAll} />
-                </th>
+                {isMod && (
+                  <th style={{ width: 40, paddingLeft: 16 }}>
+                    <div className={`custom-check${pageItems.length && pageItems.every(m => selected.has(m.id)) ? ' checked' : ''}`} onClick={toggleSelectAll} />
+                  </th>
+                )}
                 <th onClick={() => handleColumnSort('name')}>Member <i className="fas fa-sort sort-icon" /></th>
                 <th onClick={() => handleColumnSort('roblox')}>Roblox Username <i className="fas fa-sort sort-icon" /></th>
                 <th onClick={() => handleColumnSort('status')}>Status <i className="fas fa-sort sort-icon" /></th>
                 <th onClick={() => handleColumnSort('joined')}>Joined <i className="fas fa-sort sort-icon" /></th>
                 <th onClick={() => handleColumnSort('feedback')}>Feedback <i className="fas fa-sort sort-icon" /></th>
-                <th style={{ width: 120 }}>Actions</th>
+                {isMod && <th style={{ width: 120 }}>Actions</th>}
               </tr>
             </thead>
             <tbody>
               {pageItems.length === 0 ? (
-                <tr><td colSpan="7">
+                <tr><td colSpan={isMod ? 7 : 5}>
                   <div className="empty-state"><i className="fas fa-users-slash" /><p>No members found</p><span>Try adjusting your filters or search query</span></div>
                 </td></tr>
               ) : pageItems.map(m => (
                 <tr key={m.id} className={selected.has(m.id) ? 'row-selected' : ''}>
-                  <td style={{ paddingLeft: 16 }}>
-                    <div className={`custom-check${selected.has(m.id) ? ' checked' : ''}`} onClick={() => toggleSelect(m.id)} />
-                  </td>
+                  {isMod && (
+                    <td style={{ paddingLeft: 16 }}>
+                      <div className={`custom-check${selected.has(m.id) ? ' checked' : ''}`} onClick={() => toggleSelect(m.id)} />
+                    </td>
+                  )}
                   <td>
                     <div className="user-cell">
                       <div className="user-avatar" style={{ background: getAvatarColor(m.discord) }}>{getInitials(m.discord)}</div>
@@ -269,16 +273,18 @@ export default function Members({ searchQuery }) {
                   <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={m.feedback || '-'}>
                     {m.feedback || <span style={{ color: 'var(--text-muted)' }}>—</span>}
                   </td>
-                  <td>
-                    <div className="row-actions">
-                      <button className="row-action-btn" title="View Details" onClick={() => openView(m)}><i className="fas fa-eye" /></button>
-                      <button className="row-action-btn" title="Edit" onClick={() => openEdit(m)}><i className="fas fa-pen" /></button>
-                      {m.status !== 'kicked'
-                        ? <button className="row-action-btn danger" title="Kick" onClick={() => openKick(m)}><i className="fas fa-user-slash" /></button>
-                        : <button className="row-action-btn" title="Reinstate" onClick={() => reinstateMember(m.userId)}><i className="fas fa-rotate-left" /></button>
-                      }
-                    </div>
-                  </td>
+                  {isMod && (
+                    <td>
+                      <div className="row-actions">
+                        <button className="row-action-btn" title="View Details" onClick={() => openView(m)}><i className="fas fa-eye" /></button>
+                        <button className="row-action-btn" title="Edit" onClick={() => openEdit(m)}><i className="fas fa-pen" /></button>
+                        {m.status !== 'kicked'
+                          ? <button className="row-action-btn danger" title="Kick" onClick={() => openKick(m)}><i className="fas fa-user-slash" /></button>
+                          : <button className="row-action-btn" title="Reinstate" onClick={() => reinstateMember(m.userId)}><i className="fas fa-rotate-left" /></button>
+                        }
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

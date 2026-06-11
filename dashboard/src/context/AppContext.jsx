@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import {
   getToken, setToken as storeToken, captureTokenFromHash, loginRedirect, logout as doLogout,
-  fetchDashboardData, fetchGiveaways, fetchChannels,
+  fetchCurrentUser, fetchDashboardData, fetchGiveaways, fetchChannels,
   apiKickMember, apiAcceptQueue, apiRejectQueue, apiAddMember, apiUpdateMember, apiReinstateM,
   apiSaveSettings, createGiveaway, endGiveaway as apiEndGw, rerollGiveaway as apiRerollGw,
   deleteGiveaway as apiDeleteGw, fetchGiveawayDetail, getApiBase,
@@ -14,6 +14,8 @@ export function AppProvider({ children }) {
   // ── Auth state ──
   const [authenticated, setAuthenticated] = useState(!!getToken());
   const [authError, setAuthError] = useState('');
+  const [userTier, setUserTier] = useState('mod');
+  const isMod = userTier === 'mod';
 
   // ── Data ──
   const [members, setMembers] = useState([]);
@@ -54,14 +56,27 @@ export function AppProvider({ children }) {
   }, []);
 
   // ── Load data ──
+  const loadUserTier = useCallback(async () => {
+    try {
+      const me = await fetchCurrentUser();
+      setUserTier(me.tier === 'readonly' ? 'readonly' : 'mod');
+      return me;
+    } catch (e) {
+      if (e.message === 'Not authenticated' || e.message.includes('permission')) throw e;
+      setUserTier('mod');
+      return null;
+    }
+  }, []);
+
   const loadData = useCallback(async () => {
     try {
       const data = await fetchDashboardData();
+      if (data.tier) setUserTier(data.tier === 'readonly' ? 'readonly' : 'mod');
       setMembers(data.members);
       setQueue(data.queue);
-      setLogs(data.logs);
-      setFeedback(data.feedback);
-      setSettings(data.settings);
+      setLogs(data.logs || []);
+      setFeedback(data.feedback || []);
+      setSettings(data.settings || {});
       setRegimentStatus(data.status);
       setLoading(false);
       return data;
@@ -105,12 +120,12 @@ export function AppProvider({ children }) {
       setLoading(false);
       return;
     }
-    loadData().catch(() => {});
+    loadUserTier().then(() => loadData()).catch(() => {});
     const interval = setInterval(() => {
       if (getToken()) loadData().catch(() => {});
     }, 120000); // 2 minutes (was 30s) — server caches for 60s anyway
     return () => clearInterval(interval);
-  }, [authenticated, loadData]);
+  }, [authenticated, loadData, loadUserTier]);
 
   // ── Auth actions ──
   const login = useCallback(() => loginRedirect(), []);
@@ -240,7 +255,7 @@ export function AppProvider({ children }) {
 
   const value = {
     // Auth
-    authenticated, authError, login, logout, loading,
+    authenticated, authError, login, logout, loading, userTier, isMod,
     // Data
     members, queue, logs, feedback, giveaways, channels, settings, regimentStatus,
     // Data loading

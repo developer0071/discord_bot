@@ -84,8 +84,15 @@ function readState(state) {
 }
 
 // ── Session token for an authorized user ──
+// tier: 'mod' (full access) or 'readonly' (members + queue view only)
 function makeSession(user) {
-  return sign({ k: 'session', sub: user.id, name: user.tag, exp: Date.now() + SESSION_TTL_MS });
+  return sign({
+    k: 'session',
+    sub: user.id,
+    name: user.tag,
+    tier: user.tier === 'readonly' ? 'readonly' : 'mod',
+    exp: Date.now() + SESSION_TTL_MS,
+  });
 }
 
 function authorizeUrl(state) {
@@ -138,7 +145,11 @@ function requireAuth(req, res, next) {
   if (!payload || payload.k !== 'session') {
     return res.status(401).json({ error: 'Not authenticated' });
   }
-  req.user = { id: payload.sub, tag: payload.name };
+  req.user = {
+    id: payload.sub,
+    tag: payload.name,
+    tier: payload.tier === 'readonly' ? 'readonly' : 'mod',
+  };
   next();
 }
 

@@ -52,12 +52,18 @@ async function apiFetch(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  if (res.status === 401 || res.status === 403) {
+  if (res.status === 401) {
     setToken('');
-    throw new Error(res.status === 403
-      ? "Your Discord account doesn't have permission to use this dashboard."
-      : 'Not authenticated'
-    );
+    throw new Error('Not authenticated');
+  }
+  if (res.status === 403) {
+    const authPaths = ['/api/data', '/api/me'];
+    if (authPaths.some((p) => path.startsWith(p))) {
+      setToken('');
+      throw new Error("Your Discord account doesn't have permission to use this dashboard.");
+    }
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e.error || 'Permission denied');
   }
 
   if (!res.ok) {
@@ -65,6 +71,11 @@ async function apiFetch(method, path, body) {
     throw new Error(e.error || ('HTTP ' + res.status));
   }
   return res.json();
+}
+
+// ── Current user / tier ──
+export async function fetchCurrentUser() {
+  return apiFetch('GET', '/api/me');
 }
 
 // ── Data loading ──
@@ -116,7 +127,7 @@ export async function fetchDashboardData() {
   const settings = data.settings || {};
   const status = data.status || {};
 
-  return { members, queue, logs, feedback, settings, status };
+  return { members, queue, logs, feedback, settings, status, tier: data.tier || 'mod' };
 }
 
 // ── Giveaways ──

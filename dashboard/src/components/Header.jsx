@@ -2,7 +2,7 @@ import { useApp } from '../context/AppContext';
 import './Header.css';
 
 export default function Header({ onAddMember, searchQuery, onSearch }) {
-  const { members, queue, loadData, showToast, logout } = useApp();
+  const { members, queue, loadData, showToast, logout, isMod } = useApp();
   const total = members.length;
   const active = members.filter(m => m.status === 'active').length;
   const queued = queue.length;
@@ -41,9 +41,11 @@ export default function Header({ onAddMember, searchQuery, onSearch }) {
         >
           <i className="fas fa-arrows-rotate" />
         </button>
-        <button className="btn btn-primary" onClick={onAddMember}>
-          <i className="fas fa-plus" /> Add Member
-        </button>
+        {isMod && (
+          <button className="btn btn-primary" onClick={onAddMember}>
+            <i className="fas fa-plus" /> Add Member
+          </button>
+        )}
         <button
           className="btn btn-ghost btn-icon"
           title="Log out"

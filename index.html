@@ -1039,7 +1039,7 @@
             <div class="page-title">Join Queue</div>
             <div class="page-subtitle">Review and accept incoming join requests</div>
           </div>
-          <div style="display:flex;gap:8px">
+          <div style="display:flex;gap:8px" id="queueBulkActions">
             <button class="btn btn-success btn-sm" onclick="acceptAllQueue()"><i class="fas fa-check-double"></i> Accept All</button>
             <button class="btn btn-danger btn-sm" onclick="rejectAllQueue()"><i class="fas fa-xmark"></i> Reject All</button>
           </div>
@@ -1569,19 +1569,21 @@ function getFilteredMembers() {
 }
 
 function renderMembers() {
+  const readOnly = typeof isReadOnlyDashboard === 'function' && isReadOnlyDashboard();
   const filtered = getFilteredMembers();
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   if (currentPage > totalPages) currentPage = totalPages;
   const start = (currentPage - 1) * PAGE_SIZE;
   const pageItems = filtered.slice(start, start + PAGE_SIZE);
+  const colSpan = readOnly ? 5 : 7;
 
   const tbody = document.getElementById('membersTableBody');
   if (pageItems.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i class="fas fa-users-slash"></i><p>No members found</p><span>Try adjusting your filters or search query</span></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${colSpan}"><div class="empty-state"><i class="fas fa-users-slash"></i><p>No members found</p><span>Try adjusting your filters or search query</span></div></td></tr>`;
   } else {
     tbody.innerHTML = pageItems.map(m => `
       <tr class="${m.selected ? 'row-selected' : ''}" data-id="${m.id}">
-        <td style="padding-left:16px"><div class="custom-check ${m.selected?'checked':''}" onclick="toggleSelect(${m.id})"></div></td>
+        ${readOnly ? '' : `<td style="padding-left:16px"><div class="custom-check ${m.selected?'checked':''}" onclick="toggleSelect(${m.id})"></div></td>`}
         <td>
           <div class="user-cell">
             <div class="user-avatar" style="background:${getAvatarColor(m.discord)}">${getInitials(m.discord)}</div>
@@ -1595,13 +1597,13 @@ function renderMembers() {
         <td><span class="badge badge-${m.status}">${m.status === 'active' ? 'In Regiment' : m.status.charAt(0).toUpperCase()+m.status.slice(1)}</span></td>
         <td>${formatDate(m.joined)}</td>
         <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${m.feedback||'-'}">${m.feedback || '<span style="color:var(--text-muted)">—</span>'}</td>
-        <td>
+        ${readOnly ? '' : `<td>
           <div class="row-actions">
             <button class="row-action-btn" title="View Details" onclick="viewMember(${m.id})"><i class="fas fa-eye"></i></button>
             <button class="row-action-btn" title="Edit" onclick="editMember(${m.id})"><i class="fas fa-pen"></i></button>
             ${m.status !== 'kicked' ? `<button class="row-action-btn danger" title="Kick" onclick="kickMember(${m.id})"><i class="fas fa-user-slash"></i></button>` : `<button class="row-action-btn" title="Reinstate" onclick="reinstateMember(${m.id})"><i class="fas fa-rotate-left"></i></button>`}
           </div>
-        </td>
+        </td>`}
       </tr>
     `).join('');
   }
@@ -1882,6 +1884,7 @@ function reinstateMember(id) {
 // 队列
 // ============================================================
 function renderQueue() {
+  const readOnly = typeof isReadOnlyDashboard === 'function' && isReadOnlyDashboard();
   const grid = document.getElementById('queueGrid');
   if (queue.length === 0) {
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-inbox"></i><p>No pending requests</p><span>The join queue is empty right now</span></div>`;
@@ -1904,10 +1907,10 @@ function renderQueue() {
         <span><i class="fas fa-clock"></i> ${timeAgo}</span>
         <span><i class="fas fa-at"></i> ${q.discordId}</span>
       </div>
-      <div class="queue-card-actions">
+      ${readOnly ? '' : `<div class="queue-card-actions">
         <button class="btn btn-success btn-sm" onclick="acceptFromQueue(${q.id})"><i class="fas fa-check"></i> Accept</button>
         <button class="btn btn-danger btn-sm" onclick="rejectFromQueue(${q.id})"><i class="fas fa-xmark"></i> Reject</button>
-      </div>
+      </div>`}
     </div>
     `;
   }).join('');

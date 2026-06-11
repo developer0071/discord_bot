@@ -3,7 +3,7 @@ const express = require('express');
 
 const fb = require('../utils/firebase');
 const auth = require('./auth');
-const { canAccessDashboard, canManage } = require('../utils/permissions');
+const { canAccessDashboard, canManage, getDashboardTier, isModSide } = require('../utils/permissions');
 const { assignRegimentRole, removeRegimentRole } = require('../utils/helpers');
 const { promoteFromQueue } = require('../events/guildMemberRemove');
 const giveawayUtil = require('../utils/giveaway');
@@ -143,8 +143,9 @@ function startWebServer(client) {
         return res.status(403).send(authMessagePage('Access denied', "Your Discord account isn't in the server or doesn't have a dashboard-access role."));
       }
 
-      const session = auth.makeSession({ id: discordUser.id, tag: member.user.tag });
-      log('DASHBOARD_LOGIN', member.user.tag, 'Signed in to the dashboard');
+      const tier = getDashboardTier(member);
+      const session = auth.makeSession({ id: discordUser.id, tag: member.user.tag, tier });
+      log('DASHBOARD_LOGIN', member.user.tag, `Signed in to the dashboard (${tier})`);
       res.redirect(`${safeRedirect(st.redirect)}#token=${encodeURIComponent(session)}`);
     } catch (e) {
       console.error('[web] auth callback:', e);
@@ -252,6 +253,17 @@ load();
   // Everything under /api requires a valid session token from here on.
   app.use('/api', auth.requireAuth);
 
+  // Full dashboard access (mods) — blocks read-only viewers from mutations.
+  async function requireModSide(req, res, next) {
+    if (req.user.tier === 'mod') return next();
+    const member = await fetchMember(req.user.id);
+    if (member && isModSide(member)) {
+      req.user.tier = 'mod';
+      return next();
+    }
+    return res.status(403).json({ error: 'You need moderator permissions for this action' });
+  }
+
   // Managers only (create / end / delete giveaways).
   async function requireManage(req, res, next) {
     const member = await fetchMember(req.user.id);
@@ -267,21 +279,44 @@ load();
   let dataCacheTime = 0;
   const DATA_CACHE_TTL = 60_000; // 60 seconds
 
+  async function refreshUserTier(req, res) {
+    const member = await fetchMember(req.user.id);
+    const tier = member ? getDashboardTier(member) : null;
+    if (!tier) {
+      res.status(403).json({ error: 'Your dashboard access was revoked' });
+      return null;
+    }
+    req.user.tier = tier;
+    return tier;
+  }
+
+  app.get('/api/me', rlRead, async (req, res) => {
+    const tier = await refreshUserTier(req, res);
+    if (!tier) return;
+    res.json({ id: req.user.id, tag: req.user.tag, tier });
+  });
+
   app.get('/api/data', rlRead, async (req, res) => {
     try {
+      const tier = await refreshUserTier(req, res);
+      if (!tier) return;
+      const isReadOnly = tier !== 'mod';
       const now = Date.now();
-      if (dataCache && (now - dataCacheTime) < DATA_CACHE_TTL) {
-        return res.json(dataCache);
+
+      if (!isReadOnly && dataCache && (now - dataCacheTime) < DATA_CACHE_TTL) {
+        return res.json({ ...dataCache, tier: 'mod' });
       }
 
       const [status, members, queue, users, logs, settings] = await Promise.all([
         fb.getRegimentStatus(), fb.getAllMembers(), fb.getFullQueue(),
-        fb.getAllUsers(), fb.getLogs(50), fb.getDashboardSettings(),
+        isReadOnly ? Promise.resolve([]) : fb.getAllUsers(),
+        isReadOnly ? Promise.resolve([]) : fb.getLogs(50),
+        isReadOnly ? Promise.resolve({}) : fb.getDashboardSettings(),
       ]);
       const profile = Object.fromEntries(users.map((u) => [u.discordId || u.userId, u]));
       const result = {
         status,
-        settings,
+        settings: isReadOnly ? {} : settings,
         members: members.map((m) => ({
           userId: m.userId,
           discord: m.username,
@@ -297,14 +332,17 @@ load();
           families: profile[q.userId]?.families || [],
           joinedAt: tsToMs(q.joinedAt),
         })),
-        logs: logs.map((l) => ({ action: l.action, target: l.target, detail: l.detail, at: tsToMs(l.at) })),
-        feedback: users
+        logs: isReadOnly ? [] : logs.map((l) => ({ action: l.action, target: l.target, detail: l.detail, at: tsToMs(l.at) })),
+        feedback: isReadOnly ? [] : users
           .filter((u) => u.feedback)
           .map((u) => ({ author: u.discordTag || u.discordId, text: u.feedback, date: tsToMs(u.verifiedAt) || Date.now() })),
+        tier: isReadOnly ? 'readonly' : 'mod',
       };
 
-      dataCache = result;
-      dataCacheTime = now;
+      if (!isReadOnly) {
+        dataCache = result;
+        dataCacheTime = now;
+      }
       res.json(result);
     } catch (e) {
       console.error('[web] /api/data:', e);
@@ -313,7 +351,7 @@ load();
   });
 
   // ── Accept a specific user from the queue (assign role, record member) ──
-  app.post('/api/accept', rlWrite, async (req, res) => {
+  app.post('/api/accept', requireModSide, rlWrite, async (req, res) => {
     try {
       const { userId } = req.body;
       const member = await fetchMember(userId);
@@ -327,7 +365,7 @@ load();
   });
 
   // ── Reject (remove) a user from the queue ──
-  app.post('/api/reject', rlWrite, async (req, res) => {
+  app.post('/api/reject', requireModSide, rlWrite, async (req, res) => {
     try {
       const member = await fetchMember(req.body.userId);
       await fb.removeFromQueue(req.body.userId);
@@ -337,7 +375,7 @@ load();
   });
 
   // ── Kick a member from the regiment ──
-  app.post('/api/kick', rlWrite, async (req, res) => {
+  app.post('/api/kick', requireModSide, rlWrite, async (req, res) => {
     try {
       const { userId } = req.body;
       const member = await fetchMember(userId);
@@ -349,7 +387,7 @@ load();
   });
 
   // ── Add a member: by userId, or resolve by exact Discord username ──
-  app.post('/api/add', rlWrite, async (req, res) => {
+  app.post('/api/add', requireModSide, rlWrite, async (req, res) => {
     try {
       let { userId, username, roblox } = req.body;
       let member = userId ? await fetchMember(userId) : null;
@@ -373,7 +411,7 @@ load();
   });
 
   // ── Update a member's saved profile (e.g. Roblox username) ──
-  app.post('/api/update', rlWrite, async (req, res) => {
+  app.post('/api/update', requireModSide, rlWrite, async (req, res) => {
     try {
       const { userId, roblox } = req.body;
       if (!userId) return res.status(400).json({ error: 'userId required' });
@@ -383,7 +421,7 @@ load();
   });
 
   // ── Promote the next person in the queue ──
-  app.post('/api/promote', rlWrite, async (req, res) => {
+  app.post('/api/promote', requireModSide, rlWrite, async (req, res) => {
     try {
       await promoteFromQueue(guild());
       log('QUEUE_ACCEPTED', 'Next in queue', 'Promoted next from queue');
@@ -392,7 +430,7 @@ load();
   });
 
   // ── Change max slots (auto-promotes if increased) ──
-  app.post('/api/setslots', rlWrite, async (req, res) => {
+  app.post('/api/setslots', requireModSide, rlWrite, async (req, res) => {
     try {
       const newMax = parseInt(req.body.slots, 10);
       if (!Number.isInteger(newMax) || newMax < 0 || newMax > 500) return res.status(400).json({ error: 'invalid slots (0-500)' });
@@ -407,7 +445,7 @@ load();
   });
 
   // ── Giveaways (dashboard-only management) ──
-  app.get('/api/channels', rlRead, async (req, res) => {
+  app.get('/api/channels', requireModSide, rlRead, async (req, res) => {
     try {
       const g = guild();
       if (!g) return res.json({ channels: [] });
@@ -420,7 +458,7 @@ load();
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  app.get('/api/giveaways', rlRead, async (req, res) => {
+  app.get('/api/giveaways', requireModSide, rlRead, async (req, res) => {
     try {
       const list = await fb.getAllGiveaways();
       res.json({
@@ -451,7 +489,7 @@ load();
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  app.get('/api/giveaways/:id', rlRead, async (req, res) => {
+  app.get('/api/giveaways/:id', requireModSide, rlRead, async (req, res) => {
     try {
       const g = await fb.getGiveaway(req.params.id);
       if (!g) return res.status(404).json({ error: 'Giveaway not found' });
@@ -610,7 +648,7 @@ load();
   });
 
   // ── Save dashboard settings (max size + cosmetic prefs) ──
-  app.post('/api/settings', rlWrite, async (req, res) => {
+  app.post('/api/settings', requireModSide, rlWrite, async (req, res) => {
     try {
       const { name, maxSize, autoAccept, kickReason } = req.body;
       const max = parseInt(maxSize, 10);

@@ -32,6 +32,8 @@
   };
   window.logout = function () { setToken(''); location.reload(); };
 
+  window.dashboardTier = 'mod';
+
   async function api(method, path, body) {
     const res = await fetch(getApiBase() + path, {
       method,
@@ -41,15 +43,26 @@
       },
       body: body ? JSON.stringify(body) : undefined,
     });
-    if (res.status === 401 || res.status === 403) {
+    if (res.status === 401) {
       setToken('');
-      showLoginOverlay(res.status === 403 ? "Your Discord account doesn't have permission to use this dashboard." : '');
+      showLoginOverlay();
       throw new Error('Not authenticated');
+    }
+    if (res.status === 403) {
+      const authPaths = ['/api/data', '/api/me'];
+      if (authPaths.some((p) => path.startsWith(p))) {
+        setToken('');
+        showLoginOverlay("Your Discord account doesn't have permission to use this dashboard.");
+        throw new Error('Not authenticated');
+      }
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.error || 'Permission denied');
     }
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || ('HTTP ' + res.status)); }
     return res.json();
   }
   window.api = api;
+  window.isReadOnlyDashboard = function () { return window.dashboardTier === 'readonly'; };
   window.getApiBase = getApiBase;
   // Console helpers to reconfigure: setBackend('https://...'), then reload.
   window.setBackend = (url) => { localStorage.setItem('dash_api', (url || '').replace(/\/+$/, '')); location.reload(); };
@@ -78,8 +91,61 @@
   function hideLoginOverlay() { const el = document.getElementById('loginOverlay'); if (el) el.remove(); }
   window.showLoginOverlay = showLoginOverlay;
 
+  function applyReadOnlyUI() {
+    const readOnly = window.dashboardTier === 'readonly';
+    document.body.dataset.tier = readOnly ? 'readonly' : 'mod';
+
+    ['feedback', 'giveaways', 'logs', 'settings'].forEach((tab) => {
+      const nav = document.querySelector('.nav-item[data-tab="' + tab + '"]');
+      if (nav) nav.style.display = readOnly ? 'none' : '';
+    });
+
+    const addBtn = document.querySelector('.header-actions .btn-primary');
+    if (addBtn) addBtn.style.display = readOnly ? 'none' : '';
+
+    const queueBulk = document.getElementById('queueBulkActions');
+    if (queueBulk) queueBulk.style.display = readOnly ? 'none' : '';
+
+    const bulkBar = document.getElementById('bulkBar');
+    if (bulkBar) bulkBar.style.display = readOnly ? 'none' : '';
+
+    const selectAll = document.getElementById('selectAll');
+    if (selectAll) selectAll.closest('th').style.display = readOnly ? 'none' : '';
+
+    const actionsHeader = document.querySelector('#tab-members thead th:last-child');
+    if (actionsHeader) actionsHeader.style.display = readOnly ? 'none' : '';
+
+    const subtitle = document.querySelector('#tab-members .page-subtitle');
+    if (subtitle && readOnly) subtitle.textContent = 'View regiment members (read-only)';
+
+    const queueSubtitle = document.querySelector('#tab-queue .page-subtitle');
+    if (queueSubtitle && readOnly) queueSubtitle.textContent = 'View pending join requests (read-only)';
+
+    const userRole = document.querySelector('.sidebar-user-info span');
+    if (userRole) userRole.textContent = readOnly ? 'Viewer' : 'Owner';
+
+    if (readOnly && typeof switchTab === 'function') {
+      const restricted = ['feedback', 'giveaways', 'logs', 'settings'];
+      const active = document.querySelector('.nav-item.active');
+      if (active && restricted.includes(active.dataset.tab)) switchTab('members');
+    }
+  }
+
+  async function fetchUserTier() {
+    try {
+      const me = await api('GET', '/api/me');
+      window.dashboardTier = me.tier === 'readonly' ? 'readonly' : 'mod';
+    } catch (e) {
+      if (e.message === 'Not authenticated') throw e;
+      window.dashboardTier = 'mod';
+    }
+    applyReadOnlyUI();
+  }
+
   async function loadData() {
     const data = await api('GET', '/api/data');
+    if (data.tier) window.dashboardTier = data.tier === 'readonly' ? 'readonly' : 'mod';
+    applyReadOnlyUI();
 
     members.length = 0;
     data.members
@@ -325,8 +391,12 @@
   // ── Init + periodic refresh ──
   (async function init() {
     if (!getToken()) { showLoginOverlay(); return; }
-    try { await loadData(); hideLoginOverlay(); injectLogoutButton(); }
-    catch (e) { if (e.message !== 'Not authenticated') showToast('Load failed: ' + e.message, 'error'); }
+    try {
+      await fetchUserTier();
+      await loadData();
+      hideLoginOverlay();
+      injectLogoutButton();
+    } catch (e) { if (e.message !== 'Not authenticated') showToast('Load failed: ' + e.message, 'error'); }
   })();
   setInterval(() => {
     if (!getToken()) return;

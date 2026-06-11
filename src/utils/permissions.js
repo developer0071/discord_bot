@@ -2,6 +2,8 @@
 // Who is allowed to operate the regiment bot, configured in .env:
 //   REGIMENT_MANAGE_ROLE_IDS — full control: add + kick + manage (e.g. PREMIER, Commander)
 //   REGIMENT_ADD_ROLE_IDS    — add only (e.g. Lieutenant, Sergeant)
+//   MODS_SIDE                — full dashboard access (add, kick, settings, etc.)
+//   NORMAL_SIDE              — read-only dashboard (members + queue view only)
 
 function roleIds(envVar) {
   return (process.env[envVar] || '')
@@ -29,11 +31,43 @@ function canAdd(member) {
 }
 
 /**
- * Allowed to sign in to the web dashboard. Configured separately from the
- * in-Discord command roles via HAVE_ACCESS_ROLES (comma-separated role IDs).
+ * Full dashboard power — can add, kick, change settings, manage giveaways, etc.
  */
-function canAccessDashboard(member) {
-  return hasAnyRole(member, roleIds('HAVE_ACCESS_ROLES'));
+function isModSide(member) {
+  return hasAnyRole(member, roleIds('MODS_SIDE'));
 }
 
-module.exports = { canManage, canAdd, canAccessDashboard };
+/**
+ * Read-only dashboard — can view members and queue, but cannot mutate anything.
+ */
+function isNormalSide(member) {
+  return hasAnyRole(member, roleIds('NORMAL_SIDE'));
+}
+
+/**
+ * Returns 'mod', 'readonly', or null if the member may not use the dashboard.
+ * Mods take precedence when a user holds both role sets.
+ */
+function getDashboardTier(member) {
+  if (isModSide(member)) return 'mod';
+  if (isNormalSide(member)) return 'readonly';
+  // Legacy fallback while HAVE_ACCESS_ROLES is still configured
+  if (hasAnyRole(member, roleIds('HAVE_ACCESS_ROLES'))) return 'mod';
+  return null;
+}
+
+/**
+ * Allowed to sign in to the web dashboard (mods or read-only viewers).
+ */
+function canAccessDashboard(member) {
+  return getDashboardTier(member) !== null;
+}
+
+module.exports = {
+  canManage,
+  canAdd,
+  isModSide,
+  isNormalSide,
+  getDashboardTier,
+  canAccessDashboard,
+};

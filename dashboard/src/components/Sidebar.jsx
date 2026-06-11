@@ -10,8 +10,10 @@ const NAV_ITEMS = [
   { key: 'settings',  icon: 'fa-gear',                label: 'Settings',   section: 'System' },
 ];
 
+const READONLY_TABS = new Set(['members', 'queue']);
+
 export default function Sidebar() {
-  const { activeTab, setActiveTab, members, queue, giveaways } = useApp();
+  const { activeTab, setActiveTab, members, queue, giveaways, isMod } = useApp();
 
   const badgeValues = {
     memberCount: members.filter(m => m.status !== 'kicked').length,
@@ -34,7 +36,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="sidebar-nav">
-        {NAV_ITEMS.map(item => {
+        {NAV_ITEMS.filter(item => isMod || READONLY_TABS.has(item.key)).map(item => {
           const showSection = item.section !== lastSection;
           if (showSection) lastSection = item.section;
           const badge = item.badgeKey ? badgeValues[item.badgeKey] : null;
@@ -65,7 +67,7 @@ export default function Sidebar() {
           <div className="sidebar-avatar">HS</div>
           <div className="sidebar-user-info">
             <p>Hunterstar</p>
-            <span>Owner</span>
+            <span>{isMod ? 'Moderator' : 'Viewer'}</span>
           </div>
         </div>
       </div>
