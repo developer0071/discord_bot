@@ -685,7 +685,7 @@ load();
   app.post('/api/private-servers', rlWrite, async (req, res) => {
     try {
       const { link } = req.body;
-      if (!link || !link.startsWith('https://')) return res.status(400).json({ error: 'Valid HTTPS link required' });
+      if (!link) return res.status(400).json({ error: 'Server link or code required' });
       await fb.addPrivateServer(req.user.id, req.user.tag, link);
       log('PRIVATE_SERVER_ADDED', req.user.tag, 'Added a private server link');
       res.json({ ok: true });

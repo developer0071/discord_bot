@@ -234,7 +234,7 @@
 
   window.submitPrivateServer = async function () {
     const link = document.getElementById('pserverLink')?.value?.trim();
-    if (!link || !link.startsWith('https://')) { showToast('Valid HTTPS link required', 'error'); return; }
+    if (!link) { showToast('A server code or link is required', 'error'); return; }
     try {
       await api('POST', '/api/private-servers', { link });
       showToast('Private server added!', 'success');
