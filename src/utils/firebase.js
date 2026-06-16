@@ -331,6 +331,27 @@ async function getVotes(pollId) {
   return doc.exists ? (doc.data().votes || {}) : {};
 }
 
+// ─── Private Servers ─────────────────────────────────────────────────────────
+
+async function getPrivateServers() {
+  const snapshot = await db.collection('private_servers').orderBy('addedAt', 'desc').get();
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+async function addPrivateServer(userId, tag, link) {
+  // Overwrite if exists, so a user can only have 1 active
+  await db.collection('private_servers').doc(userId).set({
+    userId,
+    tag,
+    link,
+    addedAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+}
+
+async function deletePrivateServer(userId) {
+  await db.collection('private_servers').doc(userId).delete();
+}
+
 module.exports = {
   getRegimentStatus,
   updateRegimentCount,
@@ -363,4 +384,7 @@ module.exports = {
   addGiveawayEntrant,
   removeGiveawayEntrant,
   isGiveawayEntrant,
+  getPrivateServers,
+  addPrivateServer,
+  deletePrivateServer,
 };

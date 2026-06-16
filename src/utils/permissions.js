@@ -63,6 +63,13 @@ function canAccessDashboard(member) {
   return getDashboardTier(member) !== null;
 }
 
+/**
+ * Allowed to see and manage Giveaways (requires specific role)
+ */
+function canManageGiveaways(member) {
+  return hasAnyRole(member, ['1516397139578716312']);
+}
+
 module.exports = {
   canManage,
   canAdd,
@@ -70,4 +77,5 @@ module.exports = {
   isNormalSide,
   getDashboardTier,
   canAccessDashboard,
+  canManageGiveaways,
 };

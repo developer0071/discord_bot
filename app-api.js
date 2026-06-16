@@ -95,10 +95,13 @@
     const readOnly = window.dashboardTier === 'readonly';
     document.body.dataset.tier = readOnly ? 'readonly' : 'mod';
 
-    ['feedback', 'giveaways', 'logs', 'settings'].forEach((tab) => {
+    ['feedback', 'logs', 'settings'].forEach((tab) => {
       const nav = document.querySelector('.nav-item[data-tab="' + tab + '"]');
       if (nav) nav.style.display = readOnly ? 'none' : '';
     });
+
+    const gwNav = document.querySelector('.nav-item[data-tab="giveaways"]');
+    if (gwNav) gwNav.style.display = window.canManageGiveaways ? '' : 'none';
 
     const addBtn = document.querySelector('.header-actions .btn-primary');
     if (addBtn) addBtn.style.display = readOnly ? 'none' : '';
@@ -124,10 +127,13 @@
     const userRole = document.querySelector('.sidebar-user-info span');
     if (userRole) userRole.textContent = readOnly ? 'Viewer' : 'Owner';
 
-    if (readOnly && typeof switchTab === 'function') {
-      const restricted = ['feedback', 'giveaways', 'logs', 'settings'];
+    if (typeof switchTab === 'function') {
+      const restricted = ['feedback', 'logs', 'settings'];
       const active = document.querySelector('.nav-item.active');
-      if (active && restricted.includes(active.dataset.tab)) switchTab('members');
+      if (active) {
+        if (readOnly && restricted.includes(active.dataset.tab)) switchTab('members');
+        if (!window.canManageGiveaways && active.dataset.tab === 'giveaways') switchTab('members');
+      }
     }
   }
 
@@ -135,9 +141,12 @@
     try {
       const me = await api('GET', '/api/me');
       window.dashboardTier = me.tier === 'readonly' ? 'readonly' : 'mod';
+      window.canManageGiveaways = !!me.canManageGiveaways;
+      window.dashboardUserId = me.id;
     } catch (e) {
       if (e.message === 'Not authenticated') throw e;
       window.dashboardTier = 'mod';
+      window.canManageGiveaways = false;
     }
     applyReadOnlyUI();
   }
@@ -145,6 +154,7 @@
   async function loadData() {
     const data = await api('GET', '/api/data');
     if (data.tier) window.dashboardTier = data.tier === 'readonly' ? 'readonly' : 'mod';
+    if (data.canManageGiveaways !== undefined) window.canManageGiveaways = !!data.canManageGiveaways;
     applyReadOnlyUI();
 
     members.length = 0;
@@ -200,6 +210,7 @@
     if (active('logs') && typeof renderLogs === 'function') renderLogs();
     if (active('feedback') && typeof renderFeedback === 'function') renderFeedback();
     if (active('giveaways')) { await loadGiveaways().catch(() => {}); if (typeof renderGiveaways === 'function') renderGiveaways(); }
+    if (active('pservers')) { await loadPrivateServers().catch(() => {}); if (typeof renderPrivateServers === 'function') renderPrivateServers(); }
   }
   window.loadData = loadData;
 
@@ -210,6 +221,35 @@
       (data.giveaways || []).forEach((g) => giveaways.push(g));
     }
     if (typeof renderGiveaways === 'function') renderGiveaways();
+  };
+
+  window.loadPrivateServers = async function () {
+    const data = await api('GET', '/api/private-servers');
+    if (typeof privateServers !== 'undefined') {
+      privateServers.length = 0;
+      (data.servers || []).forEach((s) => privateServers.push(s));
+    }
+    if (typeof renderPrivateServers === 'function') renderPrivateServers();
+  };
+
+  window.submitPrivateServer = async function () {
+    const link = document.getElementById('pserverLink')?.value?.trim();
+    if (!link || !link.startsWith('https://')) { showToast('Valid HTTPS link required', 'error'); return; }
+    try {
+      await api('POST', '/api/private-servers', { link });
+      showToast('Private server added!', 'success');
+      document.getElementById('pserverLink').value = '';
+      await loadPrivateServers();
+    } catch (e) { showToast('Error: ' + e.message, 'error'); }
+  };
+
+  window.deletePrivateServer = async function (id) {
+    if (!confirm('Remove this private server?')) return;
+    try {
+      await api('DELETE', '/api/private-servers/' + id);
+      showToast('Private server removed', 'success');
+      await loadPrivateServers();
+    } catch (e) { showToast('Error: ' + e.message, 'error'); }
   };
 
   window.loadGiveawayChannels = async function () {

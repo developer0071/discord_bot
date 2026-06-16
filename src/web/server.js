@@ -3,7 +3,7 @@ const express = require('express');
 
 const fb = require('../utils/firebase');
 const auth = require('./auth');
-const { canAccessDashboard, canManage, getDashboardTier, isModSide } = require('../utils/permissions');
+const { canAccessDashboard, canManage, getDashboardTier, isModSide, canManageGiveaways } = require('../utils/permissions');
 const { assignRegimentRole, removeRegimentRole } = require('../utils/helpers');
 const { promoteFromQueue } = require('../events/guildMemberRemove');
 const giveawayUtil = require('../utils/giveaway');
@@ -287,13 +287,15 @@ load();
       return null;
     }
     req.user.tier = tier;
+    req.user.member = member;
     return tier;
   }
 
   app.get('/api/me', rlRead, async (req, res) => {
     const tier = await refreshUserTier(req, res);
     if (!tier) return;
-    res.json({ id: req.user.id, tag: req.user.tag, tier });
+    const canGv = canManageGiveaways(req.user.member);
+    res.json({ id: req.user.id, tag: req.user.tag, tier, canManageGiveaways: canGv });
   });
 
   app.get('/api/data', rlRead, async (req, res) => {
@@ -302,9 +304,10 @@ load();
       if (!tier) return;
       const isReadOnly = tier !== 'mod';
       const now = Date.now();
+      const canGv = canManageGiveaways(req.user.member);
 
       if (!isReadOnly && dataCache && (now - dataCacheTime) < DATA_CACHE_TTL) {
-        return res.json({ ...dataCache, tier: 'mod' });
+        return res.json({ ...dataCache, tier: 'mod', canManageGiveaways: canGv });
       }
 
       const [status, members, queue, users, logs, settings] = await Promise.all([
@@ -337,12 +340,14 @@ load();
           .filter((u) => u.feedback)
           .map((u) => ({ author: u.discordTag || u.discordId, text: u.feedback, date: tsToMs(u.verifiedAt) || Date.now() })),
         tier: isReadOnly ? 'readonly' : 'mod',
+        canManageGiveaways: canGv,
       };
 
       if (!isReadOnly) {
         dataCache = result;
         dataCacheTime = now;
       }
+      result.canManageGiveaways = canGv;
       res.json(result);
     } catch (e) {
       console.error('[web] /api/data:', e);
@@ -667,6 +672,35 @@ load();
       log('SETTINGS_CHANGED', 'System', 'Dashboard settings updated');
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
+  });
+
+  // ── Private Servers ──
+  app.get('/api/private-servers', rlRead, async (req, res) => {
+    try {
+      const servers = await fb.getPrivateServers();
+      res.json({ servers: servers.map(s => ({ id: s.id, userId: s.userId, tag: s.tag, link: s.link, addedAt: s.addedAt ? s.addedAt.toMillis() : Date.now() })) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.post('/api/private-servers', rlWrite, async (req, res) => {
+    try {
+      const { link } = req.body;
+      if (!link || !link.startsWith('https://')) return res.status(400).json({ error: 'Valid HTTPS link required' });
+      await fb.addPrivateServer(req.user.id, req.user.tag, link);
+      log('PRIVATE_SERVER_ADDED', req.user.tag, 'Added a private server link');
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.delete('/api/private-servers/:id', rlWrite, async (req, res) => {
+    try {
+      if (req.params.id !== req.user.id && req.user.tier !== 'mod') {
+        return res.status(403).json({ error: 'You can only delete your own server' });
+      }
+      await fb.deletePrivateServer(req.params.id);
+      log('PRIVATE_SERVER_REMOVED', req.user.tag, 'Removed private server link');
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
   app.listen(port, () => {
