@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require('discord.js');
 const vip = require('../config/vipServers');
+const fb = require('../utils/firebase');
 
 // ─── Regiment join detection ─────────────────────────────────────────────────
 // Fires when a message mentions the regiment. Word boundaries keep it from
@@ -20,11 +21,12 @@ function matchesPrivateServer(content) {
   return PS_PATTERN.test(content);
 }
 
-function vipEmbed() {
-  const lines = vip.servers.length
-    ? vip.servers.map((s) => `**${s.name}** — \`${s.code}\``).join('\n')
+async function vipEmbed() {
+  const servers = await fb.getPrivateServers();
+  const lines = servers.length
+    ? servers.map((s) => `**${(s.tag || 'Unknown').split('#')[0]}s** — \`${s.link}\``).join('\n')
     : '_No codes have been set yet._';
-  return new EmbedBuilder().setColor(vip.color || 0x9b59b6).setTitle(vip.title).setDescription(lines);
+  return new EmbedBuilder().setColor(vip.color || 0x9b59b6).setTitle('🔒 Private Server Codes').setDescription(lines);
 }
 
 // ─── Cooldowns ───────────────────────────────────────────────────────────────
@@ -60,7 +62,8 @@ module.exports = {
       if (now - lastPsSentAt < PS_COOLDOWN_MS) return; // still on cooldown — silently ignore
       lastPsSentAt = now;
       try {
-        await message.reply({ embeds: [vipEmbed()] });
+        const embed = await vipEmbed();
+        await message.reply({ embeds: [embed] });
         console.log(`[PS] Sent server codes (triggered by ${message.author.tag})`);
       } catch (err) {
         console.error('[messageCreate] PS reply failed:', err);
