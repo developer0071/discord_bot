@@ -428,6 +428,68 @@
     await loadData();
   };
 
+  // ── Family Management ──
+  let availableFamilies = [];
+  let userFamilies = [];
+
+  window.loadFamilies = async function () {
+    try {
+      const data = await api('GET', '/api/families');
+      availableFamilies = data.options || [];
+      userFamilies = data.current || [];
+      if (typeof renderFamilies === 'function') renderFamilies();
+    } catch (e) {
+      if (typeof showToast === 'function') showToast('Failed to load families: ' + e.message, 'error');
+    }
+  };
+
+  window.toggleFamily = function (value) {
+    const idx = userFamilies.indexOf(value);
+    if (idx > -1) {
+      userFamilies.splice(idx, 1);
+    } else {
+      userFamilies.push(value);
+    }
+    renderFamilies();
+  };
+
+  window.renderFamilies = function () {
+    const grid = document.getElementById('familyGrid');
+    if (!grid) return;
+    
+    if (availableFamilies.length === 0) {
+      grid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1;text-align:center;">No families available.</p>';
+      return;
+    }
+
+    grid.innerHTML = availableFamilies.map(f => {
+      const isSelected = userFamilies.includes(f.value);
+      let filename = f.value;
+      let ext = '.png';
+      if (f.value === 'helos') ext = '.jpeg';
+      if (f.value === 'reiss') filename = 'Reiss';
+      let imgFile = filename + ext;
+      
+      return `
+        <div class="family-card ${isSelected ? 'selected' : ''}" onclick="toggleFamily('${f.value}')">
+          <img src="/family/${imgFile}" alt="${f.label}" onerror="this.src='/logo.png'">
+          <h4>${f.label}</h4>
+          <div class="checkmark"><i class="fas fa-check"></i></div>
+        </div>
+      `;
+    }).join('');
+  };
+
+  window.submitFamilies = async function () {
+    try {
+      const r = await api('POST', '/api/families', { families: userFamilies });
+      if (typeof showToast === 'function') showToast('Families updated successfully!', 'success');
+      userFamilies = r.families || userFamilies;
+      renderFamilies();
+    } catch (e) {
+      if (typeof showToast === 'function') showToast('Failed to save families: ' + e.message, 'error');
+    }
+  };
   // ── Init + periodic refresh ──
   (async function init() {
     if (!getToken()) { showLoginOverlay(); return; }

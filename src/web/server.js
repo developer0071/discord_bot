@@ -116,6 +116,7 @@ function startWebServer(client) {
   app.get('/', (req, res) => res.sendFile(path.join(rootDir, 'index.html')));
   app.get('/app-api.js', (req, res) => res.sendFile(path.join(rootDir, 'app-api.js')));
   app.get('/logo.png', (req, res) => res.sendFile(path.join(rootDir, 'logo.png')));
+  app.use('/family', express.static(path.join(rootDir, 'dashboard', 'src', 'family')));
 
   // Write an audit-log entry (best-effort, never blocks an action).
   const log = (action, target, detail) => fb.addLog(action, target, detail).catch(() => {});
@@ -296,6 +297,51 @@ load();
     if (!tier) return;
     const canGv = canManageGiveaways(req.user.member);
     res.json({ id: req.user.id, tag: req.user.tag, tier, canManageGiveaways: canGv });
+  });
+
+  app.get('/api/families', rlRead, async (req, res) => {
+    try {
+      const familyConfig = require('../config/families');
+      const profile = await fb.getUserProfile(req.user.id);
+      res.json({
+        options: familyConfig.options,
+        current: profile?.families || []
+      });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/families', rlWrite, async (req, res) => {
+    try {
+      const { families: newFamilies } = req.body;
+      if (!Array.isArray(newFamilies)) return res.status(400).json({ error: 'families must be an array' });
+
+      const familyConfig = require('../config/families');
+      const validValues = familyConfig.options.map(f => f.value);
+      const validSelection = newFamilies.filter(v => validValues.includes(v));
+
+      const member = await fetchMember(req.user.id);
+      if (!member) return res.status(404).json({ error: 'You are not in the server' });
+
+      const rolesToAdd = validSelection
+        .map(v => familyConfig.options.find(o => o.value === v)?.roleId)
+        .filter(Boolean);
+      
+      const allFamilyRoles = familyConfig.options.map(o => o.roleId);
+      const rolesToRemove = allFamilyRoles.filter(r => !rolesToAdd.includes(r));
+
+      if (rolesToRemove.length) await member.roles.remove(rolesToRemove).catch(() => {});
+      if (rolesToAdd.length) await member.roles.add(rolesToAdd).catch(() => {});
+
+      await fb.saveUserProfile(req.user.id, { families: validSelection });
+      log('FAMILY_UPDATED', req.user.tag, `Updated families to: ${validSelection.join(', ') || 'none'}`);
+
+      res.json({ ok: true, families: validSelection });
+    } catch (e) {
+      console.error('[web] family update error:', e);
+      res.status(500).json({ error: e.message });
+    }
   });
 
   app.get('/api/data', rlRead, async (req, res) => {
