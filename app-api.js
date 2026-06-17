@@ -469,10 +469,9 @@
       if (f.value === 'helos') ext = '.jpeg';
       if (f.value === 'reiss') filename = 'Reiss';
       let imgFile = filename + ext;
-      
       return `
         <div class="family-card ${isSelected ? 'selected' : ''}" onclick="toggleFamily('${f.value}')">
-          <img src="/family/${imgFile}" alt="${f.label}" onerror="this.src='/logo.png'">
+          <img src="/dashboard/src/family/${imgFile}" alt="${f.label}" onerror="this.src='/logo.png'">
           <h4>${f.label}</h4>
           <div class="checkmark"><i class="fas fa-check"></i></div>
         </div>
