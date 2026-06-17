@@ -32,7 +32,7 @@ module.exports = {
       style: 'Primary',
       title: '📘 Community Guidelines',
       description:
-        'Add your community/regiment guidelines here.\n\n',
+        '### Queue & Ticket Guidelines\n* **Complete Verification First:** Before asking about your invite status, make sure you have completed the verification process.\n* **Ticket Creation:** After verification, a ticket will be created for your request.\n* **Expect Varied Wait Times:** Invite times can vary depending on queue size and staff availability.\n* **Do Not Spam Status Requests:** Please avoid repeatedly asking for invite updates, as it may slow down the process.\n* **Account or Role Changes:** If you need to change family roles or account information, open a ticket and provide the required details.\n* **First-Come, First-Served:** Staff will review requests in the order they are received unless special circumstances apply.\n* **Be Patient:** Please be patient while waiting for a response from staff.\n\n### Difference Between Rules and Guidelines\n* **Rules:** Requirements that must be followed. Breaking a rule may result in moderation action.\n* **Guidelines:** Recommendations that explain the normal process and best practices.',
     },
     {
       id: 'info_roles',
