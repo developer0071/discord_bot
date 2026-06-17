@@ -4,9 +4,9 @@
 
 module.exports = {
   options: [
+    { value: 'shiki',    label: 'Shiki',        emoji: '🔵', roleId: '1503612996117598318' },
     { value: 'helos',    label: 'Helos',        emoji: '❤️', roleId: '1503612775279362189' },
     { value: 'fritz',    label: 'Fritz',        emoji: '🔴', roleId: '1503612658182520963' },
-    { value: 'shiki',    label: 'Shiki',        emoji: '🔵', roleId: '1503612996117598318' },
     { value: 'ackerman', label: 'Ackerman',     emoji: '💛', roleId: '1503612899506258001' },
     { value: 'yeager',   label: 'Yeager',       emoji: '🟡', roleId: '1503612855348498492' },
     { value: 'reiss',    label: 'Reiss',        emoji: '🟨', roleId: '1503612943936520324' },
