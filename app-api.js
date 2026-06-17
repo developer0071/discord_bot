@@ -472,7 +472,7 @@
       return `
         <div class="family-card ${isSelected ? 'selected' : ''}" onclick="toggleFamily('${f.value}')">
           <div class="card-image-wrapper">
-            <img src="/dashboard/src/family/${imgFile}" alt="${f.label}" onerror="this.src='/logo.png'">
+            <img src="/family/${imgFile}" alt="${f.label}" onerror="this.src='/logo.png'">
             <div class="checkmark"><i class="fas fa-check"></i></div>
           </div>
           <div class="family-card-content">
