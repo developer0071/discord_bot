@@ -471,9 +471,13 @@
       let imgFile = filename + ext;
       return `
         <div class="family-card ${isSelected ? 'selected' : ''}" onclick="toggleFamily('${f.value}')">
-          <img src="/dashboard/src/family/${imgFile}" alt="${f.label}" onerror="this.src='/logo.png'">
-          <h4>${f.label}</h4>
-          <div class="checkmark"><i class="fas fa-check"></i></div>
+          <div class="card-image-wrapper">
+            <img src="/dashboard/src/family/${imgFile}" alt="${f.label}" onerror="this.src='/logo.png'">
+            <div class="checkmark"><i class="fas fa-check"></i></div>
+          </div>
+          <div class="family-card-content">
+            <h4>${f.label}</h4>
+          </div>
         </div>
       `;
     }).join('');
