@@ -181,6 +181,10 @@ export async function apiUpdateMember({ userId, roblox, status }) {
   return apiFetch('POST', '/api/update', { userId, roblox, status });
 }
 
+export async function apiBulkUpdateStatus(userIds, status) {
+  return apiFetch('POST', '/api/bulk-update', { userIds, status });
+}
+
 export async function apiReinstateM(userId) {
   return apiFetch('POST', '/api/add', { userId });
 }

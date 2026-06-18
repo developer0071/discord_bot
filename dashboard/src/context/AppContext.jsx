@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback, useRef, useEffect } f
 import {
   getToken, setToken as storeToken, captureTokenFromHash, loginRedirect, logout as doLogout,
   fetchCurrentUser, fetchDashboardData, fetchGiveaways, fetchChannels,
-  apiKickMember, apiAcceptQueue, apiRejectQueue, apiAddMember, apiUpdateMember, apiReinstateM,
+  apiKickMember, apiAcceptQueue, apiRejectQueue, apiAddMember, apiUpdateMember, apiBulkUpdateStatus, apiReinstateM,
   apiSaveSettings, createGiveaway, endGiveaway as apiEndGw, rerollGiveaway as apiRerollGw,
   deleteGiveaway as apiDeleteGw, fetchGiveawayDetail, getApiBase,
 } from '../utils/api';
@@ -195,10 +195,12 @@ export function AppProvider({ children }) {
 
   const bulkUpdateStatus = useCallback(async (userIds, newStatus) => {
     setMembers(prev => prev.map(m => userIds.includes(m.userId) ? { ...m, status: newStatus } : m));
-    for (const userId of userIds) {
-      try { await apiUpdateMember({ userId, status: newStatus }); } catch { /* skip */ }
+    try {
+      await apiBulkUpdateStatus(userIds, newStatus);
+      showToast(`Updated ${userIds.length} member(s) to ${newStatus}`, 'success');
+    } catch (e) {
+      showToast(`Bulk update failed: ${e.message}`, 'error');
     }
-    showToast(`Updated ${userIds.length} member(s) to ${newStatus}`, 'success');
     await loadData().catch(() => {});
   }, [showToast, loadData]);
 

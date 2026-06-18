@@ -412,8 +412,12 @@
       }
     }
     if (!sel.length) return;
-    for (const m of sel) { try { await api('POST', '/api/update', { userId: m.userId, status: newStatus }); } catch (e) { /* skip */ } }
-    showToast('Updated ' + sel.length + ' member(s) to ' + newStatus, 'success');
+    try {
+      await api('POST', '/api/bulk-update', { userIds: sel.map(m => m.userId), status: newStatus });
+      showToast('Updated ' + sel.length + ' member(s) to ' + newStatus, 'success');
+    } catch (e) {
+      showToast('Bulk update failed: ' + e.message, 'error');
+    }
     if (typeof clearSelection === 'function') clearSelection();
     await loadData();
   };

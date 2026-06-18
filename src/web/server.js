@@ -475,6 +475,19 @@ load();
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
 
+  // ── Bulk update status ──
+  app.post('/api/bulk-update', requireModSide, rlWrite, async (req, res) => {
+    try {
+      const { userIds, status } = req.body;
+      if (!userIds || !Array.isArray(userIds)) return res.status(400).json({ error: 'userIds array required' });
+      const updates = { status };
+      for (const userId of userIds) {
+        await fb.saveUserProfile(userId, updates);
+      }
+      res.json({ ok: true });
+    } catch (e) { res.status(400).json({ error: e.message }); }
+  });
+
   // ── Promote the next person in the queue ──
   app.post('/api/promote', requireModSide, rlWrite, async (req, res) => {
     try {
