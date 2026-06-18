@@ -163,7 +163,7 @@
       .forEach((m, i) => members.push({
         id: i + 1, userId: m.userId,
         discord: m.discord, roblox: m.roblox || '—',
-        status: 'active', joined: new Date(m.joinedAt || Date.now()),
+        status: m.status || 'active', joined: new Date(m.joinedAt || Date.now()),
         feedback: (m.families || []).join(', '), notes: '', selected: false,
       }));
 

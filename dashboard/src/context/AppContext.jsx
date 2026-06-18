@@ -185,11 +185,20 @@ export function AppProvider({ children }) {
     await loadData().catch(() => {});
   }, [showToast, loadData]);
 
-  const updateMember = useCallback(async ({ userId, roblox }) => {
+  const updateMember = useCallback(async ({ userId, roblox, status }) => {
     try {
-      await apiUpdateMember({ userId, roblox });
+      await apiUpdateMember({ userId, roblox, status });
       showToast('Updated member', 'success');
     } catch (e) { showToast('Failed: ' + e.message, 'error'); throw e; }
+    await loadData().catch(() => {});
+  }, [showToast, loadData]);
+
+  const bulkUpdateStatus = useCallback(async (userIds, newStatus) => {
+    setMembers(prev => prev.map(m => userIds.includes(m.userId) ? { ...m, status: newStatus } : m));
+    for (const userId of userIds) {
+      try { await apiUpdateMember({ userId, status: newStatus }); } catch { /* skip */ }
+    }
+    showToast(`Updated ${userIds.length} member(s) to ${newStatus}`, 'success');
     await loadData().catch(() => {});
   }, [showToast, loadData]);
 
@@ -266,7 +275,7 @@ export function AppProvider({ children }) {
     toasts, showToast, removeToast,
     // Member actions
     kickMember, acceptFromQueue, rejectFromQueue, acceptAllQueue, rejectAllQueue,
-    addMember, updateMember, reinstateMember, bulkKick,
+    addMember, updateMember, reinstateMember, bulkKick, bulkUpdateStatus,
     // Settings
     saveSettings,
     // Giveaways

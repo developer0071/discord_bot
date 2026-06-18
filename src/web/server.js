@@ -371,6 +371,7 @@ load();
           discord: m.username,
           roblox: profile[m.userId]?.robloxUsername || '',
           families: profile[m.userId]?.families || [],
+          status: profile[m.userId]?.status || 'active',
           joinedAt: tsToMs(m.joinedAt),
         })),
         queue: queue.map((q) => ({
@@ -461,12 +462,15 @@ load();
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
 
-  // ── Update a member's saved profile (e.g. Roblox username) ──
+  // ── Update a member's saved profile (e.g. Roblox username, status) ──
   app.post('/api/update', requireModSide, rlWrite, async (req, res) => {
     try {
-      const { userId, roblox } = req.body;
+      const { userId, roblox, status } = req.body;
       if (!userId) return res.status(400).json({ error: 'userId required' });
-      await fb.saveUserProfile(userId, { ...(roblox ? { robloxUsername: roblox } : {}) });
+      const updates = {};
+      if (roblox !== undefined) updates.robloxUsername = roblox;
+      if (status !== undefined) updates.status = status;
+      await fb.saveUserProfile(userId, updates);
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });

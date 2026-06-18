@@ -89,7 +89,7 @@ export async function fetchDashboardData() {
       userId: m.userId,
       discord: m.discord,
       roblox: m.roblox || '—',
-      status: 'active',
+      status: m.status || 'active',
       joined: new Date(m.joinedAt || Date.now()),
       feedback: (m.families || []).join(', '),
       notes: '',
@@ -177,8 +177,8 @@ export async function apiAddMember({ userId, username, roblox }) {
   return apiFetch('POST', '/api/add', { userId, username, roblox });
 }
 
-export async function apiUpdateMember({ userId, roblox }) {
-  return apiFetch('POST', '/api/update', { userId, roblox });
+export async function apiUpdateMember({ userId, roblox, status }) {
+  return apiFetch('POST', '/api/update', { userId, roblox, status });
 }
 
 export async function apiReinstateM(userId) {

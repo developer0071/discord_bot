@@ -8,7 +8,7 @@ import './Members.css';
 const PAGE_SIZE = 8;
 
 export default function Members({ searchQuery }) {
-  const { members, kickMember, addMember, updateMember, reinstateMember, bulkKick, showToast, isMod } = useApp();
+  const { members, kickMember, addMember, updateMember, reinstateMember, bulkKick, bulkUpdateStatus, showToast, isMod } = useApp();
 
   // ── Local state ──
   const [filter, setFilter] = useState('all');
@@ -124,7 +124,7 @@ export default function Members({ searchQuery }) {
     if (!formDiscord.trim()) { showToast('Discord name is required', 'error'); return; }
     try {
       if (editingMember) {
-        await updateMember({ userId: editingMember.userId, roblox: formRoblox.trim() });
+        await updateMember({ userId: editingMember.userId, roblox: formRoblox.trim(), status: formStatus });
       } else {
         await addMember({ username: formDiscord.trim(), roblox: formRoblox.trim() });
       }
@@ -142,6 +142,18 @@ export default function Members({ searchQuery }) {
     const userIds = members.filter(m => selected.has(m.id) && m.status !== 'kicked').map(m => m.userId);
     if (!userIds.length) { showToast('No kickable members selected', 'warning'); return; }
     await bulkKick(userIds);
+    clearSelection();
+  };
+
+  const handleBulkLocalStatus = (newStatus) => {
+    let userIds;
+    if (selected.size > 0) {
+      userIds = members.filter(m => selected.has(m.id)).map(m => m.userId);
+    } else {
+      userIds = filtered.map(m => m.userId);
+    }
+    if (!userIds.length) return;
+    bulkUpdateStatus(userIds, newStatus);
     clearSelection();
   };
 
@@ -208,6 +220,12 @@ export default function Members({ searchQuery }) {
           </button>
         ))}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          {isMod && (
+            <div style={{ display: 'flex', gap: 4, marginRight: 8, background: 'var(--bg-card)', padding: 4, borderRadius: 8 }}>
+              <button className="btn btn-ghost btn-sm" style={{ padding: '0 8px', height: 28, fontSize: 12 }} onClick={() => handleBulkLocalStatus('active')}>Make in</button>
+              <button className="btn btn-ghost btn-sm" style={{ padding: '0 8px', height: 28, fontSize: 12 }} onClick={() => handleBulkLocalStatus('inactive')}>Make out</button>
+            </div>
+          )}
           <select className="filter-select" value={sort.replace('date-desc', 'date-new').replace('date-asc', 'date-old').replace('status-asc', 'status')} onChange={e => handleSortSelect(e.target.value)}>
             <option value="name-asc">Name A-Z</option>
             <option value="name-desc">Name Z-A</option>
