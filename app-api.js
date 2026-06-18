@@ -402,6 +402,22 @@
     await loadData();
   };
 
+  window.bulkUpdateLocalStatus = async function(newStatus) {
+    let sel = members.filter((m) => m.selected);
+    if (!sel.length) {
+      if (typeof getFilteredMembers === 'function') {
+        sel = getFilteredMembers();
+      } else {
+        return;
+      }
+    }
+    if (!sel.length) return;
+    for (const m of sel) { try { await api('POST', '/api/update', { userId: m.userId, status: newStatus }); } catch (e) { /* skip */ } }
+    showToast('Updated ' + sel.length + ' member(s) to ' + newStatus, 'success');
+    if (typeof clearSelection === 'function') clearSelection();
+    await loadData();
+  };
+
   window.reinstateMember = async function (id) {
     const m = members.find((x) => x.id === id);
     if (!m) return;
@@ -413,11 +429,12 @@
   window.submitAddMember = async function () {
     const discord = document.getElementById('formDiscord').value.trim();
     const roblox = document.getElementById('formRoblox').value.trim();
+    const status = document.getElementById('formStatus') ? document.getElementById('formStatus').value : 'active';
     if (!discord) { showToast('Discord name is required', 'error'); return; }
     try {
       if (editingId) {
         const m = members.find((x) => x.id === editingId);
-        await api('POST', '/api/update', { userId: m.userId, roblox });
+        await api('POST', '/api/update', { userId: m.userId, roblox, status });
         showToast('Updated ' + discord, 'success');
       } else {
         const r = await api('POST', '/api/add', { username: discord, roblox });

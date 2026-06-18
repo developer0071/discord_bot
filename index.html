@@ -1207,6 +1207,10 @@
           <button class="filter-chip" data-filter="inactive" onclick="setFilter('inactive',this)">Inactive <span class="count" id="fc-inactive"></span></button>
           <button class="filter-chip" data-filter="kicked" onclick="setFilter('kicked',this)">Kicked <span class="count" id="fc-kicked"></span></button>
           <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+            <div id="bulkStatusControls" style="display:flex; gap:4px; margin-right:8px; background:var(--bg-card); padding:4px; border-radius:8px;">
+              <button class="btn btn-ghost btn-sm" style="padding:0 8px; height:28px; font-size:12px;" onclick="bulkUpdateLocalStatus('active')">Make in</button>
+              <button class="btn btn-ghost btn-sm" style="padding:0 8px; height:28px; font-size:12px;" onclick="bulkUpdateLocalStatus('inactive')">Make out</button>
+            </div>
             <select class="filter-select" id="sortSelect" onchange="handleSort()">
               <option value="name-asc">Name A-Z</option>
               <option value="name-desc">Name Z-A</option>
