@@ -502,6 +502,44 @@ load();
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
 
+  // ── Sync members with Discord ──
+  app.post('/api/sync', requireModSide, rlWrite, async (req, res) => {
+    try {
+      const g = guild();
+      if (!g) return res.status(500).json({ error: 'Guild not found' });
+      await g.members.fetch(); // Load all members into cache
+
+      const roleId = process.env.REGIMENT_ROLE_ID;
+      const validDiscordMembers = g.members.cache.filter(m => m.roles.cache.has(roleId));
+
+      const dbMembers = await fb.getAllMembers();
+      let added = 0, removed = 0;
+
+      // Remove DB members not in Discord (or missing the role)
+      for (const dbM of dbMembers) {
+        if (!validDiscordMembers.has(dbM.userId)) {
+          await fb.removeMember(dbM.userId);
+          removed++;
+        }
+      }
+
+      // Add missing Discord members to DB
+      for (const [id, member] of validDiscordMembers) {
+        if (!dbMembers.find(m => m.userId === id)) {
+          await fb.addMember(id, member.user.tag);
+          added++;
+        }
+      }
+
+      const newCount = await fb.syncRegimentCount();
+      log('MEMBERS_SYNCED', req.user.tag, `Synced members: added ${added}, removed ${removed}, total ${newCount}`);
+      res.json({ ok: true, added, removed, total: newCount });
+    } catch (e) {
+      console.error('[web] /api/sync error:', e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ── Promote the next person in the queue ──
   app.post('/api/promote', requireModSide, rlWrite, async (req, res) => {
     try {

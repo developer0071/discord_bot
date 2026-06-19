@@ -352,9 +352,20 @@ async function deletePrivateServer(userId) {
   await db.collection('private_servers').doc(userId).delete();
 }
 
+/**
+ * Sync the currentCount in config/regiment to exactly match the number of members.
+ */
+async function syncRegimentCount() {
+  const snapshot = await db.collection('members').get();
+  const count = snapshot.size;
+  await db.collection('config').doc('regiment').update({ currentCount: count });
+  return count;
+}
+
 module.exports = {
   getRegimentStatus,
   updateRegimentCount,
+  syncRegimentCount,
   setMaxSlots,
   addToQueue,
   removeFromQueue,

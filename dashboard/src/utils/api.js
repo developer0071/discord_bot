@@ -189,6 +189,10 @@ export async function apiReinstateM(userId) {
   return apiFetch('POST', '/api/add', { userId });
 }
 
+export async function apiSyncMembers() {
+  return apiFetch('POST', '/api/sync');
+}
+
 // ── Settings ──
 export async function apiSaveSettings(settings) {
   return apiFetch('POST', '/api/settings', settings);

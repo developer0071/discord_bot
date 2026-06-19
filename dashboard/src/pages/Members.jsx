@@ -8,7 +8,7 @@ import './Members.css';
 const PAGE_SIZE = 8;
 
 export default function Members({ searchQuery }) {
-  const { members, kickMember, addMember, updateMember, reinstateMember, bulkKick, bulkUpdateStatus, showToast, isMod } = useApp();
+  const { members, kickMember, addMember, updateMember, reinstateMember, bulkKick, bulkUpdateStatus, syncMembers, showToast, isMod } = useApp();
 
   // ── Local state ──
   const [filter, setFilter] = useState('all');
@@ -202,6 +202,11 @@ export default function Members({ searchQuery }) {
           <div className="page-subtitle">{isMod ? 'Manage all members currently in the regiment' : 'View regiment members (read-only)'}</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          {isMod && (
+            <button className="btn btn-primary btn-sm" onClick={syncMembers}>
+              <i className="fas fa-sync" /> Sync Data
+            </button>
+          )}
           <button className="btn btn-ghost btn-sm" onClick={handleExportCSV}><i className="fas fa-download" /> Export CSV</button>
           <button className="btn btn-ghost btn-sm" onClick={handleExportPNG} style={{ color: 'var(--accent)' }}><i className="fas fa-image" /> Export PNG</button>
         </div>

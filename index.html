@@ -1195,6 +1195,7 @@
             <div class="page-subtitle">Manage all members currently in the regiment</div>
           </div>
           <div style="display:flex;gap:8px">
+            <button class="btn btn-primary btn-sm mod-only" onclick="syncMembers()"><i class="fas fa-sync"></i> Sync Data</button>
             <button class="btn btn-ghost btn-sm" onclick="exportData()"><i class="fas fa-download"></i> Export CSV</button>
             <button class="btn btn-ghost btn-sm" onclick="exportAsPNG()" style="color:var(--accent)"><i class="fas fa-image"></i> Export PNG</button>
           </div>
@@ -2368,6 +2369,24 @@ function renderLogs() {
 // ============================================================
 // 导出
 // ============================================================
+async function syncMembers() {
+  try {
+    const res = await fetch(getApiBase() + '/api/sync', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getTokenHeader()
+      }
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Failed to sync');
+    showToast(`Synced members: Added ${json.added}, Removed ${json.removed}, Total ${json.total}`, 'success');
+    loadDashboardData();
+  } catch (e) {
+    showToast('Sync failed: ' + e.message, 'error');
+  }
+}
+
 function exportData() {
   const filtered = getFilteredMembers();
   const esc = (v) => '"' + String(v || '').replace(/"/g, '""') + '"';

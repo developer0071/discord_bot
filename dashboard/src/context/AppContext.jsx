@@ -3,7 +3,7 @@ import {
   getToken, setToken as storeToken, captureTokenFromHash, loginRedirect, logout as doLogout,
   fetchCurrentUser, fetchDashboardData, fetchGiveaways, fetchChannels,
   apiKickMember, apiAcceptQueue, apiRejectQueue, apiAddMember, apiUpdateMember, apiBulkUpdateStatus, apiReinstateM,
-  apiSaveSettings, createGiveaway, endGiveaway as apiEndGw, rerollGiveaway as apiRerollGw,
+  apiSaveSettings, apiSyncMembers, createGiveaway, endGiveaway as apiEndGw, rerollGiveaway as apiRerollGw,
   deleteGiveaway as apiDeleteGw, fetchGiveawayDetail, getApiBase,
 } from '../utils/api';
 
@@ -221,6 +221,14 @@ export function AppProvider({ children }) {
   }, [showToast, loadData]);
 
   // ── Settings ──
+  const syncMembers = useCallback(async () => {
+    try {
+      const res = await apiSyncMembers();
+      showToast(`Synced members: Added ${res.added}, Removed ${res.removed}, Total ${res.total}`, 'success');
+    } catch (e) { showToast('Sync failed: ' + e.message, 'error'); }
+    await loadData().catch(() => {});
+  }, [showToast, loadData]);
+
   const saveSettings = useCallback(async (s) => {
     try {
       await apiSaveSettings(s);
@@ -277,7 +285,7 @@ export function AppProvider({ children }) {
     toasts, showToast, removeToast,
     // Member actions
     kickMember, acceptFromQueue, rejectFromQueue, acceptAllQueue, rejectAllQueue,
-    addMember, updateMember, reinstateMember, bulkKick, bulkUpdateStatus,
+    addMember, updateMember, reinstateMember, bulkKick, bulkUpdateStatus, syncMembers,
     // Settings
     saveSettings,
     // Giveaways
