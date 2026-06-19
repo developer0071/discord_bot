@@ -2371,17 +2371,9 @@ function renderLogs() {
 // ============================================================
 async function syncMembers() {
   try {
-    const res = await fetch(getApiBase() + '/api/sync', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getTokenHeader()
-      }
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Failed to sync');
+    const json = await window.api('POST', '/api/sync');
     showToast(`Synced members: Added ${json.added}, Removed ${json.removed}, Total ${json.total}`, 'success');
-    loadDashboardData();
+    loadData();
   } catch (e) {
     showToast('Sync failed: ' + e.message, 'error');
   }
