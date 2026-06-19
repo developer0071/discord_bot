@@ -99,6 +99,7 @@ function startWebServer(client) {
     const allowed = new Set();
     if (process.env.DASHBOARD_ORIGIN) allowed.add(process.env.DASHBOARD_ORIGIN.replace(/\/+$/, ''));
     try { allowed.add(new URL(process.env.DISCORD_OAUTH_REDIRECT).origin); } catch { /* ignore */ }
+    allowed.add('https://speak.hunterstar.online');
     try { const u = new URL(redirect); if (allowed.has(u.origin)) return redirect.split('#')[0]; } catch { /* ignore */ }
     return process.env.DASHBOARD_ORIGIN || '/';
   }
