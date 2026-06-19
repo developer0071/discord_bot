@@ -275,6 +275,17 @@ load();
     next();
   }
 
+  // Giveaway dashboard access (managers, mods, or generous role)
+  async function requireGiveawayMod(req, res, next) {
+    const member = await fetchMember(req.user.id);
+    if (!member) return res.status(403).json({ error: 'User not found in server' });
+    if (req.user.tier === 'mod' || isModSide(member) || canManageGiveaways(member) || canManage(member)) {
+      req.member = member;
+      return next();
+    }
+    return res.status(403).json({ error: 'You need giveaway permissions for this action' });
+  }
+
   // ── Data (with server-side cache to reduce Firestore reads) ──
   let dataCache = null;
   let dataCacheTime = 0;
@@ -513,7 +524,7 @@ load();
   });
 
   // ── Giveaways (dashboard-only management) ──
-  app.get('/api/channels', requireModSide, rlRead, async (req, res) => {
+  app.get('/api/channels', requireGiveawayMod, rlRead, async (req, res) => {
     try {
       const g = guild();
       if (!g) return res.json({ channels: [] });
@@ -526,7 +537,7 @@ load();
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  app.get('/api/giveaways', requireModSide, rlRead, async (req, res) => {
+  app.get('/api/giveaways', requireGiveawayMod, rlRead, async (req, res) => {
     try {
       const list = await fb.getAllGiveaways();
       res.json({
@@ -557,7 +568,7 @@ load();
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  app.get('/api/giveaways/:id', requireModSide, rlRead, async (req, res) => {
+  app.get('/api/giveaways/:id', requireGiveawayMod, rlRead, async (req, res) => {
     try {
       const g = await fb.getGiveaway(req.params.id);
       if (!g) return res.status(404).json({ error: 'Giveaway not found' });
@@ -614,7 +625,7 @@ load();
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
 
-  app.post('/api/giveaways', requireManage, async (req, res) => {
+  app.post('/api/giveaways', requireGiveawayMod, async (req, res) => {
     try {
       const { title, prize, startsAt, endsAt, winnerCount, channelId, requiredRoleIds } = req.body;
       if (!title?.trim()) return res.status(400).json({ error: 'Title is required' });
@@ -655,7 +666,7 @@ load();
     }
   });
 
-  app.post('/api/giveaways/:id/end', requireManage, async (req, res) => {
+  app.post('/api/giveaways/:id/end', requireGiveawayMod, async (req, res) => {
     try {
       const result = await giveawayUtil.endGiveaway(client, req.params.id);
       if (!result) return res.status(404).json({ error: 'Giveaway not found or already ended' });
@@ -664,7 +675,7 @@ load();
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
 
-  app.post('/api/giveaways/:id/reroll', requireManage, async (req, res) => {
+  app.post('/api/giveaways/:id/reroll', requireGiveawayMod, async (req, res) => {
     try {
       const g = await fb.getGiveaway(req.params.id);
       if (!g || g.status !== 'ended') return res.status(400).json({ error: 'Giveaway must be ended to reroll' });
@@ -695,7 +706,7 @@ load();
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
 
-  app.delete('/api/giveaways/:id', requireManage, async (req, res) => {
+  app.delete('/api/giveaways/:id', requireGiveawayMod, async (req, res) => {
     try {
       const g = await fb.getGiveaway(req.params.id);
       if (!g) return res.status(404).json({ error: 'Giveaway not found' });
