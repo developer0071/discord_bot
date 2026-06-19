@@ -114,6 +114,8 @@ function startWebServer(client) {
 
   // ── Public: the dashboard UI (login happens client-side; data needs auth) ──
   app.get('/', (req, res) => res.sendFile(path.join(rootDir, 'index.html')));
+  app.get('/chat', (req, res) => res.sendFile(path.join(rootDir, 'chat.html')));
+  app.get('/chat.html', (req, res) => res.sendFile(path.join(rootDir, 'chat.html')));
   app.get('/app-api.js', (req, res) => res.sendFile(path.join(rootDir, 'app-api.js')));
   app.get('/logo.png', (req, res) => res.sendFile(path.join(rootDir, 'logo.png')));
   app.use('/family', express.static(path.join(rootDir, 'dashboard', 'src', 'family')));
@@ -521,6 +523,36 @@ load();
       log('SETTINGS_CHANGED', 'System', `Max slots set to ${newMax}`);
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
+  });
+
+  // ── Chat (Mod Side) ──
+  app.get('/api/chat/channels', requireModSide, rlRead, async (req, res) => {
+    try {
+      const g = guild();
+      if (!g) return res.json({ channels: [] });
+      const channels = g.channels.cache
+        .filter((c) => c.isTextBased() && !c.isThread())
+        .map((c) => ({ id: c.id, name: c.name, parent: c.parent?.name || null }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      res.json({ channels });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.post('/api/chat/send', requireModSide, rlWrite, async (req, res) => {
+    try {
+      const { channelId, content } = req.body;
+      if (!channelId || !content || typeof content !== 'string') {
+        return res.status(400).json({ error: 'Channel ID and content are required' });
+      }
+      const g = guild();
+      if (!g) return res.status(500).json({ error: 'Guild not found' });
+      const channel = g.channels.cache.get(channelId);
+      if (!channel || !channel.isTextBased()) {
+        return res.status(404).json({ error: 'Text channel not found' });
+      }
+      await channel.send({ content: content.slice(0, 2000) });
+      res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
   // ── Giveaways (dashboard-only management) ──
