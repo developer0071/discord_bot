@@ -10,7 +10,7 @@
   // ⚠️ If your Cloudflare tunnel URL changes (it does on restart unless it's a
   // named tunnel), update this one line and redeploy. A localStorage override
   // via setBackend('https://...') also works without redeploying.
-  const DEFAULT_API_BASE = 'https://api.hunterstar.online';
+  const DEFAULT_API_BASE = 'https://speak.hunterstar.online';
 
   function getApiBase() {
     return (localStorage.getItem('dash_api') || DEFAULT_API_BASE).replace(/\/+$/, '');
