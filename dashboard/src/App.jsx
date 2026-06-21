@@ -12,9 +12,9 @@ import Toast from './components/Toast';
 import { useApp } from './context/AppContext';
 
 export default function App() {
-  const { isReady, isLoggedIn, isMod } = useApp();
+  const { loading, authenticated, isMod } = useApp();
 
-  if (!isReady) {
+  if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'white', fontFamily: 'Inter' }}>
         <h2>Loading connection...</h2>
@@ -22,7 +22,7 @@ export default function App() {
     );
   }
 
-  if (!isLoggedIn) {
+  if (!authenticated) {
     return (
       <>
         <LoginOverlay />
