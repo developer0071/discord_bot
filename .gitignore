@@ -7,4 +7,6 @@ firebase-service-account.json
 
 .vercel
 .env*
+!.env.example
+!bot/.env.example
 family/

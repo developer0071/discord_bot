@@ -1,0 +1,32 @@
+{
+  "name": "moonlight-soldiers-leveling-bot",
+  "version": "1.0.0",
+  "description": "Production Discord leveling bot for Moonlight Soldiers",
+  "main": "bot.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "node --watch bot.js",
+    "check": "node --check bot.js && node --check src/cache.js && node --check src/firebase.js && node --check src/xp.js && node --check src/metrics.js && node --check src/levelUp.js && node --check src/commands/index.js && node --check src/events/messageCreate.js && node --check src/events/ready.js",
+    "pm2:start": "pm2 start ecosystem.config.js"
+  },
+  "keywords": [
+    "discord",
+    "leveling",
+    "firebase"
+  ],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "discord.js": "^14.26.4",
+    "dotenv": "^16.4.7",
+    "firebase-admin": "^12.7.0",
+    "pm2": "^6.0.14"
+  },
+  "overrides": {
+    "undici": "6.27.0"
+  }
+}
