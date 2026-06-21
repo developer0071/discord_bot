@@ -1,4 +1,4 @@
-const CACHE_NAME = 'moonlight-soldiers-cache-v3';
+const CACHE_NAME = 'moonlight-soldiers-cache-v5';
 
 // Install event - cache core assets
 self.addEventListener('install', event => {
@@ -44,23 +44,32 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  const request = event.request;
+  const accept = request.headers.get('accept') || '';
+  const isFreshCriticalAsset =
+    request.mode === 'navigate' ||
+    accept.includes('text/html') ||
+    request.url.endsWith('/app-api.js') ||
+    request.url.endsWith('/sw.js');
+
   event.respondWith(
-    caches.match(event.request).then(cachedResponse => {
-      const networkFetch = fetch(event.request).then(response => {
-        // Update the cache with the new response
+    fetch(request)
+      .then(response => {
         if (response && response.status === 200) {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, responseClone);
+            cache.put(request, responseClone);
           });
         }
         return response;
-      }).catch(err => {
+      })
+      .catch(err => {
         console.error('Network fetch failed', err);
-      });
-
-      // Return the cached response if we have it, otherwise wait for the network fetch
-      return cachedResponse || networkFetch;
-    })
+        return caches.match(request).then(cachedResponse => {
+          if (cachedResponse) return cachedResponse;
+          if (!isFreshCriticalAsset) return Response.error();
+          throw err;
+        });
+      })
   );
 });

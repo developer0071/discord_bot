@@ -19,6 +19,10 @@
   // ── Auth (Discord OAuth → signed session token) ──
   function getToken() { return localStorage.getItem('dash_token') || ''; }
   function setToken(t) { if (t) localStorage.setItem('dash_token', t); else localStorage.removeItem('dash_token'); }
+  function getTokenHeader() {
+    const token = getToken();
+    return token ? { Authorization: 'Bearer ' + token } : {};
+  }
 
   // After returning from Discord login the token arrives in the URL fragment.
   (function captureToken() {
@@ -62,6 +66,19 @@
     return res.json();
   }
   window.api = api;
+  window.getToken = getToken;
+  window.getTokenHeader = getTokenHeader;
+  window.syncMembers = async function () {
+    try {
+      const json = await api('POST', '/api/sync');
+      if (typeof showToast === 'function') {
+        showToast(`Synced members: Added ${json.added || 0}, Removed ${json.removed || 0}, Total ${json.total || 0}`, 'success');
+      }
+      await loadData();
+    } catch (e) {
+      if (typeof showToast === 'function') showToast('Sync failed: ' + e.message, 'error');
+    }
+  };
   window.isReadOnlyDashboard = function () { return window.dashboardTier === 'readonly'; };
   window.getApiBase = getApiBase;
   // Console helpers to reconfigure: setBackend('https://...'), then reload.
