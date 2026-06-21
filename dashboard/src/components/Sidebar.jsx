@@ -1,19 +1,20 @@
+import { NavLink } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import './Sidebar.css';
 
 const NAV_ITEMS = [
-  { key: 'members',   icon: 'fa-users',              label: 'Members',    section: 'Management', badgeKey: 'memberCount' },
-  { key: 'queue',     icon: 'fa-clock-rotate-left',   label: 'Join Queue', section: 'Management', badgeKey: 'queueCount' },
-  { key: 'feedback',  icon: 'fa-message',             label: 'Feedback',   section: 'Management' },
-  { key: 'giveaways', icon: 'fa-gift',                label: 'Giveaways',  section: 'Management', badgeKey: 'giveawayCount' },
-  { key: 'logs',      icon: 'fa-scroll',              label: 'Audit Log',  section: 'System' },
-  { key: 'settings',  icon: 'fa-gear',                label: 'Settings',   section: 'System' },
+  { key: 'members',   path: '/members',   icon: 'fa-users',             label: 'Members',       section: 'Management', badgeKey: 'memberCount' },
+  { key: 'queue',     path: '/queue',     icon: 'fa-clock-rotate-left',  label: 'Join Queue',    section: 'Management', badgeKey: 'queueCount' },
+  { key: 'feedback',  path: '/feedback',  icon: 'fa-message',            label: 'Feedback',      section: 'Management' },
+  { key: 'giveaways', path: '/giveaways', icon: 'fa-gift',               label: 'Giveaways',     section: 'Management', badgeKey: 'giveawayCount' },
+  { key: 'chat',      path: '/chat',      icon: 'fa-comments',           label: 'Live Chat',     section: 'Management' },
+  { key: 'logs',      path: '/audit',     icon: 'fa-scroll',             label: 'Audit Log',     section: 'System' },
+  { key: 'settings',  path: '/settings',  icon: 'fa-gear',               label: 'Settings',      section: 'System' },
 ];
 
-const READONLY_TABS = new Set(['members', 'queue']);
+const READONLY_TABS = new Set(['members', 'queue', 'chat']);
 
 export default function Sidebar() {
-  const { activeTab, setActiveTab, members, queue, giveaways, isMod } = useApp();
+  const { members, queue, giveaways, isMod } = useApp();
 
   const badgeValues = {
     memberCount: members.filter(m => m.status !== 'kicked').length,
@@ -49,14 +50,14 @@ export default function Sidebar() {
                   {item.section}
                 </div>
               )}
-              <div
-                className={`nav-item${activeTab === item.key ? ' active' : ''}`}
-                onClick={() => setActiveTab(item.key)}
+              <NavLink
+                to={item.path}
+                className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
               >
                 <i className={`fas ${item.icon}`} />
                 {item.label}
                 {showBadge && <span className="nav-badge">{badge}</span>}
-              </div>
+              </NavLink>
             </div>
           );
         })}
@@ -64,9 +65,9 @@ export default function Sidebar() {
 
       <div className="sidebar-footer">
         <div className="sidebar-user">
-          <div className="sidebar-avatar">HS</div>
+          <div className="sidebar-avatar">MS</div>
           <div className="sidebar-user-info">
-            <p>Hunterstar</p>
+            <p>Moonlight Soldier</p>
             <span>{isMod ? 'Moderator' : 'Viewer'}</span>
           </div>
         </div>

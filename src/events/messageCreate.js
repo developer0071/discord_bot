@@ -1,7 +1,7 @@
 const { EmbedBuilder } = require('discord.js');
 const vip = require('../config/vipServers');
 const fb = require('../utils/firebase');
-
+const { awardMessageXp } = require('../leveling/xpHandler');
 // ─── Regiment join detection ─────────────────────────────────────────────────
 // Fires when a message mentions the regiment. Word boundaries keep it from
 // matching unrelated words like "register" or "region".
@@ -85,6 +85,13 @@ module.exports = {
       } catch (err) {
         console.error('[messageCreate] Failed to reply:', err);
       }
+    }
+
+    // ── Award XP for chatting ──
+    try {
+      await awardMessageXp(message, message.client);
+    } catch (err) {
+      console.error('[messageCreate] Failed to award XP:', err);
     }
   },
 

@@ -5,7 +5,7 @@ export default function AuditLog() {
   const { logs } = useApp();
 
   return (
-    <div className="tab-content active" id="tab-logs">
+    <div className="page-content" id="tab-logs">
       <div className="page-title-row">
         <div>
           <h1 className="page-title">Audit Log</h1>

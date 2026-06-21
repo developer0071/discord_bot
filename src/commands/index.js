@@ -37,6 +37,12 @@ const info = require('../config/info');
 const timevote = require('../utils/timevote');
 const vip = require('../config/vipServers');
 
+const xpMath = require('../leveling/xp');
+const cache = require('../leveling/cache');
+const firebaseXP = require('../leveling/firebaseXP');
+const metrics = require('../leveling/metrics');
+const { sendLevelUpAnnouncement } = require('../leveling/levelUp');
+
 // Reply used when a member lacks permission for a command.
 function deny(interaction) {
   return interaction.reply({
@@ -567,6 +573,161 @@ const utcCommand = {
   },
 };
 
+// ─── /rank ───────────────────────────────────────────────────────────────────
+const rankCommand = {
+  data: new SlashCommandBuilder()
+    .setName('rank')
+    .setDescription('Check your or someone else\'s XP and Level')
+    .addUserOption(option => 
+      option.setName('user').setDescription('The user to check').setRequired(false)
+    ),
+
+  async execute(interaction) {
+    const targetUser = interaction.options.getUser('user') || interaction.user;
+    const userData = cache.getUser(targetUser.id);
+
+    if (!userData) {
+      return interaction.reply({ content: `${targetUser.username} has no XP yet.`, flags: MessageFlags.Ephemeral });
+    }
+
+    const progress = xpMath.getProgress(userData.xp, userData.level);
+    const progressBar = xpMath.formatProgressBar(progress.percent);
+
+    const embed = new EmbedBuilder()
+      .setTitle(`${targetUser.username}'s Rank`)
+      .setThumbnail(targetUser.displayAvatarURL())
+      .addFields(
+        { name: 'Level', value: String(userData.level), inline: true },
+        { name: 'Total XP', value: userData.xp.toLocaleString(), inline: true },
+        { name: 'Progress', value: `${progressBar} (${progress.percent}%)`, inline: false },
+        { name: 'Next Level', value: `${userData.xp.toLocaleString()} / ${progress.nextLevelXp.toLocaleString()} XP`, inline: false }
+      )
+      .setColor('#0099ff')
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  },
+};
+
+// ─── /leaderboard ────────────────────────────────────────────────────────────
+const leaderboardCommand = {
+  data: new SlashCommandBuilder()
+    .setName('leaderboard')
+    .setDescription('Show the top 10 members with the highest XP'),
+
+  async execute(interaction) {
+    let leaders = cache.getLeaderboardCache();
+
+    if (!leaders) {
+      leaders = cache.getAllUsers()
+        .sort((a, b) => b.xp - a.xp)
+        .slice(0, 10);
+      cache.setLeaderboardCache(leaders);
+    }
+
+    if (!leaders.length) {
+      return interaction.reply('The leaderboard is empty.');
+    }
+
+    const description = leaders
+      .map((user, index) => `**${index + 1}.** ${user.username} - Level ${user.level} (${user.xp.toLocaleString()} XP)`)
+      .join('\n');
+
+    const embed = new EmbedBuilder()
+      .setTitle('Top 10 Leaderboard')
+      .setDescription(description)
+      .setColor('#FFD700')
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  },
+};
+
+// ─── /boostrank ──────────────────────────────────────────────────────────────
+const boostRankCommand = {
+  data: new SlashCommandBuilder()
+    .setName('boostrank')
+    .setDescription('Add XP to a specific user (Admin only)')
+    .addUserOption(option => option.setName('user').setDescription('The user').setRequired(true))
+    .addIntegerOption(option => option.setName('amount').setDescription('XP amount to add').setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  async execute(interaction) {
+    if (!canManage(interaction.member)) return deny(interaction);
+
+    const targetUser = interaction.options.getUser('user');
+    const amount = interaction.options.getInteger('amount');
+    const guildId = interaction.guildId;
+
+    if (amount <= 0) {
+      return interaction.reply({ content: 'Amount must be positive.', flags: MessageFlags.Ephemeral });
+    }
+
+    const previous = cache.getUser(targetUser.id) || {
+      xp: 0, level: 0, username: targetUser.username, lastMessageTime: 0,
+    };
+
+    const nextXp = previous.xp + amount;
+    const nextLevel = xpMath.getLevelFromXp(nextXp);
+
+    cache.setUser(targetUser.id, {
+      xp: nextXp, level: nextLevel, username: targetUser.username, lastMessageTime: previous.lastMessageTime,
+    }, { dirty: true });
+
+    await firebaseXP.writeAuditLog(guildId, {
+      userId: targetUser.id, action: 'boost_rank', oldLevel: previous.level, newLevel: nextLevel,
+      xpChange: amount, adminId: interaction.user.id, adminName: interaction.user.tag, reason: 'Slash command'
+    }, metrics);
+
+    await firebaseXP.appendRankHistory(guildId, targetUser.id, {
+      action: 'boost_rank', oldLevel: previous.level, newLevel: nextLevel, xpChange: amount,
+      adminId: interaction.user.id, adminName: interaction.user.tag,
+    }, metrics);
+
+    if (nextLevel > previous.level) {
+      await sendLevelUpAnnouncement({ client: interaction.client, cache }, targetUser.id, previous.level, nextLevel, guildId);
+    }
+
+    await interaction.reply({ content: `Boosted ${targetUser.username} by ${amount.toLocaleString()} XP. New level: ${nextLevel}.` });
+  },
+};
+
+// ─── /resetstats ─────────────────────────────────────────────────────────────
+const resetStatsCommand = {
+  data: new SlashCommandBuilder()
+    .setName('resetstats')
+    .setDescription('Reset a user\'s XP and Level (Admin only)')
+    .addUserOption(option => option.setName('user').setDescription('The user').setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  async execute(interaction) {
+    if (!canManage(interaction.member)) return deny(interaction);
+
+    const targetUser = interaction.options.getUser('user');
+    const guildId = interaction.guildId;
+
+    const previous = cache.getUser(targetUser.id) || {
+      xp: 0, level: 0, username: targetUser.username, lastMessageTime: 0,
+    };
+
+    cache.setUser(targetUser.id, {
+      xp: 0, level: 0, username: targetUser.username, lastMessageTime: 0,
+    }, { dirty: true });
+
+    await firebaseXP.writeAuditLog(guildId, {
+      userId: targetUser.id, action: 'reset_stats', oldLevel: previous.level, newLevel: 0,
+      xpChange: -previous.xp, adminId: interaction.user.id, adminName: interaction.user.tag, reason: 'Slash command'
+    }, metrics);
+
+    await firebaseXP.appendRankHistory(guildId, targetUser.id, {
+      action: 'reset_stats', oldLevel: previous.level, newLevel: 0, xpChange: -previous.xp,
+      adminId: interaction.user.id, adminName: interaction.user.tag,
+    }, metrics);
+
+    await interaction.reply({ content: `Reset stats for ${targetUser.username}.` });
+  },
+};
+
 module.exports = [
   queueCommand,
   myPositionCommand,
@@ -583,4 +744,8 @@ module.exports = [
   giveRoleCommand,
   psCommand,
   utcCommand,
+  rankCommand,
+  leaderboardCommand,
+  boostRankCommand,
+  resetStatsCommand,
 ];

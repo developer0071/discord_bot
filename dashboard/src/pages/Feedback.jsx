@@ -20,7 +20,7 @@ export default function Feedback() {
   }, [feedback, filter]);
 
   return (
-    <div className="tab-content active" id="tab-feedback">
+    <div className="page-content" id="tab-feedback">
       <div className="page-title-row">
         <div>
           <h1 className="page-title">Member Feedback</h1>

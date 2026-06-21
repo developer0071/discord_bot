@@ -42,7 +42,7 @@ export function logout() {
 }
 
 // Core fetch wrapper with auth
-async function apiFetch(method, path, body) {
+export async function apiFetch(method, path, body) {
   const res = await fetch(getApiBase() + path, {
     method,
     headers: {

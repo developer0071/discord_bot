@@ -21,7 +21,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="tab-content active" id="tab-settings">
+    <div className="page-content" id="tab-settings">
       <div className="page-title-row">
         <div>
           <h1 className="page-title">Settings</h1>

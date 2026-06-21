@@ -5,7 +5,7 @@ export default function Queue() {
   const { queue, acceptFromQueue, rejectFromQueue, acceptAllQueue, rejectAllQueue, isMod } = useApp();
 
   return (
-    <div className="tab-content active" id="tab-queue">
+    <div className="page-content" id="tab-queue">
       <div className="page-title-row">
         <div>
           <h1 className="page-title">Join Queue</h1>

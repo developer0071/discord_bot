@@ -195,7 +195,7 @@ export default function Members({ searchQuery }) {
   };
 
   return (
-    <div className="tab-content active" id="tab-members">
+    <div className="page-content">
       <div className="page-title-row">
         <div>
           <h1 className="page-title">Regiment Members</h1>

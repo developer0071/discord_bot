@@ -90,7 +90,7 @@ export default function Giveaways() {
   const apiBase = getApiBase();
 
   return (
-    <div className="tab-content active" id="tab-giveaways">
+    <div className="page-content" id="tab-giveaways">
       <div className="page-title-row">
         <div>
           <h1 className="page-title">Giveaways</h1>

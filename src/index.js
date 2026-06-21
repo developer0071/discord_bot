@@ -17,7 +17,10 @@ const verification      = require('./events/verification');
 const { startWebServer } = require('./web/server');
 const { startGiveawayScheduler } = require('./utils/giveaway');
 const commands          = require('./commands/index');
-
+const firebaseXP        = require('./leveling/firebaseXP');
+const cache             = require('./leveling/cache');
+const metrics           = require('./leveling/metrics');
+const { sendLevelUpAnnouncement } = require('./leveling/levelUp');
 // ─── Client Setup ─────────────────────────────────────────────────────────────
 const client = new Client({
   intents: [
@@ -42,6 +45,30 @@ client.once('clientReady', async () => {
   await registerSlashCommands();
   startWebServer(client);
   startGiveawayScheduler(client);
+
+  // ── Initialize XP System ──
+  const isFbReady = firebaseXP.initFirebase();
+  if (isFbReady) {
+    // Assuming a single primary guild for cache
+    const primaryGuildId = client.guilds.cache.first()?.id;
+    if (primaryGuildId) {
+      console.log(`[XP] Loading data for primary guild ${primaryGuildId}`);
+      const users = await firebaseXP.loadGuildUsers(primaryGuildId, metrics);
+      cache.initCache(primaryGuildId, users);
+
+      firebaseXP.startBatchWriteInterval({ cache, metrics, intervalMs: 60000 });
+      firebaseXP.setupFirebaseListeners({
+        guildId: primaryGuildId,
+        cache,
+        metrics,
+        announceLevelUp: async (userId, oldLevel, newLevel, guildId) => {
+          const ctx = { client, cache, firebase: firebaseXP, metrics };
+          await sendLevelUpAnnouncement(ctx, userId, oldLevel, newLevel, guildId);
+        }
+      });
+      console.log('[XP] Leveling system initialized');
+    }
+  }
 });
 
 client.on('guildMemberAdd',    member => guildMemberAdd.execute(member));
@@ -121,8 +148,14 @@ async function registerSlashCommands() {
 client.login(process.env.DISCORD_TOKEN);
 
 // ─── Graceful Shutdown ────────────────────────────────────────────────────────
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   console.log('\n👋 Shutting down...');
+  console.log('Saving pending XP data...');
+  try {
+    await firebaseXP.saveOnShutdown(cache, metrics);
+  } catch (err) {
+    console.error('Failed to save pending XP data:', err);
+  }
   client.destroy();
   process.exit(0);
 });
