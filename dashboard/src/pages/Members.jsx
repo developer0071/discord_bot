@@ -7,8 +7,8 @@ import './Members.css';
 
 const PAGE_SIZE = 8;
 
-export default function Members({ searchQuery }) {
-  const { members, kickMember, addMember, updateMember, reinstateMember, bulkKick, bulkUpdateStatus, syncMembers, showToast, isMod } = useApp();
+export default function Members() {
+  const { members, kickMember, addMember, updateMember, reinstateMember, bulkKick, bulkUpdateStatus, syncMembers, showToast, isMod, searchQuery } = useApp();
 
   // ── Local state ──
   const [filter, setFilter] = useState('all');

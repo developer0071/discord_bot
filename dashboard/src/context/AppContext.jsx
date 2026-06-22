@@ -31,6 +31,7 @@ export function AppProvider({ children }) {
 
   // ── Active tab ──
   const [activeTab, setActiveTab] = useState('members');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // ── Toasts ──
   const [toasts, setToasts] = useState([]);
@@ -281,8 +282,9 @@ export function AppProvider({ children }) {
     members, leveling, queue, logs, feedback, giveaways, channels, settings, regimentStatus,
     // Data loading
     loadData, loadGiveaways, loadChannels,
-    // Tab
+    // Tab & Search
     activeTab, setActiveTab,
+    searchQuery, setSearchQuery,
     // Toasts
     toasts, showToast, removeToast,
     // Member actions

@@ -1,8 +1,8 @@
 import { useApp } from '../context/AppContext';
 import './Header.css';
 
-export default function Header({ onAddMember, searchQuery, onSearch }) {
-  const { members, queue, loadData, showToast, logout, isMod } = useApp();
+export default function Header({ onAddMember }) {
+  const { members, queue, loadData, showToast, logout, isMod, searchQuery, setSearchQuery } = useApp();
   const total = members.length;
   const active = members.filter(m => m.status === 'active').length;
   const queued = queue.length;
@@ -16,7 +16,7 @@ export default function Header({ onAddMember, searchQuery, onSearch }) {
           id="globalSearch"
           placeholder="Search members by name, Roblox, or Discord..."
           value={searchQuery}
-          onChange={e => onSearch(e.target.value)}
+          onChange={e => setSearchQuery(e.target.value)}
         />
       </div>
       <div className="header-stats">
