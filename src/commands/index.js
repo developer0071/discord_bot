@@ -629,14 +629,20 @@ const leaderboardCommand = {
       return interaction.reply('The leaderboard is empty.');
     }
 
+    const medals = ['🥇', '🥈', '🥉'];
     const description = leaders
-      .map((user, index) => `**${index + 1}.** ${user.username} - Level ${user.level} (${user.xp.toLocaleString()} XP)`)
-      .join('\n');
+      .map((user, index) => {
+        const rank = index < 3 ? medals[index] : `\` #${index + 1} \``;
+        return `${rank} **${user.username}**\n   └─ Level **${user.level}** • ✨ \`${user.xp.toLocaleString()} XP\``;
+      })
+      .join('\n\n');
 
     const embed = new EmbedBuilder()
-      .setTitle('Top 10 Leaderboard')
+      .setTitle('🏆 Regiment XP Leaderboard')
       .setDescription(description)
-      .setColor('#FFD700')
+      .setColor('#a855f7')
+      .setThumbnail(interaction.guild.iconURL({ dynamic: true }) || null)
+      .setFooter({ text: `Keep chatting to earn XP!`, iconURL: interaction.client.user.displayAvatarURL() })
       .setTimestamp();
 
     await interaction.reply({ embeds: [embed] });

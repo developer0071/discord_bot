@@ -484,7 +484,7 @@ load();
       const oldLevel = userData.level;
       
       // Update cache
-      cache.updateUser(userId, { xp: newXp, level: newLevel });
+      cache.setUser(userId, { xp: newXp, level: newLevel });
       
       // Log it
       await log('LEVELING_MODIFIED', req.user.tag, `Action: ${action}, UserId: ${userId}, NewXP: ${newXp}, NewLevel: ${newLevel}`);
@@ -498,7 +498,7 @@ load();
           firebase: require('../leveling/firebaseXP'),
           metrics
         };
-        await sendLevelUpAnnouncement(context, userId, oldLevel, newLevel);
+        await sendLevelUpAnnouncement(context, userId, oldLevel, newLevel, guild().id);
       }
       
       res.json({ ok: true, xp: newXp, level: newLevel });
