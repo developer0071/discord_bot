@@ -113,12 +113,8 @@ function startWebServer(client) {
       `<p><a href="${process.env.DASHBOARD_ORIGIN || '/'}" style="color:#7aa2ff">Back to dashboard</a></p></div></div>`;
   }
 
-  // ── Public: the dashboard UI (login happens client-side; data needs auth) ──
-  app.get('/', (req, res) => res.sendFile(path.join(rootDir, 'index.html')));
-  app.get('/chat', (req, res) => res.sendFile(path.join(rootDir, 'chat.html')));
-  app.get('/chat.html', (req, res) => res.sendFile(path.join(rootDir, 'chat.html')));
-  app.get('/app-api.js', (req, res) => res.sendFile(path.join(rootDir, 'app-api.js')));
-  app.get('/logo.png', (req, res) => res.sendFile(path.join(rootDir, 'logo.png')));
+  // Serve built static assets from the dashboard
+  app.use(express.static(path.join(rootDir, 'dashboard', 'dist')));
   app.use('/family', express.static(path.join(rootDir, 'dashboard', 'src', 'family')));
 
   // Write an audit-log entry (best-effort, never blocks an action).
@@ -846,6 +842,12 @@ load();
       log('PRIVATE_SERVER_REMOVED', req.user.tag, 'Removed private server link');
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // Fallback all routes to the dashboard's index.html
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/auth')) return next();
+    res.sendFile(path.join(rootDir, 'dashboard', 'dist', 'index.html'));
   });
 
   app.listen(port, () => {
