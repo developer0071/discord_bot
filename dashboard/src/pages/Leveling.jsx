@@ -67,15 +67,6 @@ export default function Leveling() {
       </div>
 
       <div className="controls-bar">
-        <div className="search-box">
-          <i className="fas fa-search"></i>
-          <input
-            type="text"
-            placeholder="Search members by name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
         <div className="stats-badges">
           <span className="badge-stat"><i className="fas fa-users"></i> {filtered.length} Members</span>
         </div>

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'moonlight-soldiers-cache-v5';
+const CACHE_NAME = 'v6';
 
 // Install event - cache core assets
 self.addEventListener('install', event => {
