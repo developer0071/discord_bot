@@ -454,7 +454,7 @@ load();
       
       const { sendLevelUpAnnouncement } = require('../leveling/levelUp');
       const { getLevelFromXp, getXpForLevel } = require('../leveling/xp');
-      const metrics = require('../utils/metrics');
+      const metrics = require('../leveling/metrics');
       
       const userData = cache.getUser(userId) || { xp: 0, level: 0 };
       let newXp = userData.xp;
