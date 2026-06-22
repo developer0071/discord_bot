@@ -172,42 +172,44 @@ export default function Leveling() {
       </div>
 
       {selectedUser && (
-        <div className="modal-overlay" onClick={() => setSelectedUser(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay open" onClick={() => setSelectedUser(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Boost {selectedUser.discord}</h2>
-              <button className="btn-close" onClick={() => setSelectedUser(null)}>&times;</button>
+              <h3>Boost {selectedUser.roblox || selectedUser.discord}</h3>
+              <button className="modal-close" onClick={() => setSelectedUser(null)}>&times;</button>
             </div>
             <form onSubmit={handleAction} className="modal-form">
-              <div className="form-group">
-                <label>Action Type</label>
-                <select value={actionType} onChange={e => setActionType(e.target.value)} className="form-input">
-                  <option value="add_xp">Add XP</option>
-                  <option value="set_xp">Set Total XP</option>
-                  <option value="set_level">Set Level (Nightmare Curve)</option>
-                  <option value="reset">Reset to Level 0</option>
-                </select>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label className="form-label">Action Type</label>
+                  <select value={actionType} onChange={e => setActionType(e.target.value)} className="form-select-input">
+                    <option value="add_xp">Add XP</option>
+                    <option value="set_xp">Set Total XP</option>
+                    <option value="set_level">Set Level (Nightmare Curve)</option>
+                    <option value="reset">Reset to Level 0</option>
+                  </select>
+                </div>
+
+                {actionType !== 'reset' && (
+                  <div className="form-group">
+                    <label className="form-label">Amount</label>
+                    <input
+                      type="number"
+                      min="0"
+                      required
+                      value={actionValue}
+                      onChange={e => setActionValue(e.target.value)}
+                      placeholder={actionType.includes('level') ? "e.g. 50" : "e.g. 1000"}
+                      className="form-input"
+                    />
+                    {actionType === 'add_xp' && <p className="form-hint" style={{fontSize: '12px', marginTop: '6px', color: 'var(--text-muted)'}}>Adds this amount to their current {selectedUser.xp || 0} XP.</p>}
+                    {actionType === 'set_level' && <p className="form-hint" style={{fontSize: '12px', marginTop: '6px', color: 'var(--danger)'}}>Warning: This will set their total XP to precisely the amount required for this level.</p>}
+                  </div>
+                )}
               </div>
 
-              {actionType !== 'reset' && (
-                <div className="form-group">
-                  <label>Amount</label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={actionValue}
-                    onChange={e => setActionValue(e.target.value)}
-                    placeholder={actionType.includes('level') ? "e.g. 50" : "e.g. 1000"}
-                    className="form-input"
-                  />
-                  {actionType === 'add_xp' && <p className="form-hint">Adds this amount to their current {selectedUser.xp || 0} XP.</p>}
-                  {actionType === 'set_level' && <p className="form-hint" style={{color: '#ff4757'}}>Warning: This will set their total XP to precisely the amount required for this level.</p>}
-                </div>
-              )}
-
-              <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setSelectedUser(null)}>Cancel</button>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-ghost" onClick={() => setSelectedUser(null)}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={loading}>
                   {loading ? 'Applying...' : 'Apply Action'}
                 </button>
