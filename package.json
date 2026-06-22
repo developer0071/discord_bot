@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "deploy:vercel:prod": "cd dashboard && vercel --prod"
+    "deploy:vercel:prod": "node deploy.js"
   },
   "dependencies": {
     "discord.js": "^14.15.3",
