@@ -9,7 +9,7 @@ const MAX_XP_PER_MESSAGE = 25;
  */
 function getXpForLevel(level) {
   const safeLevel = Math.max(0, Math.floor(Number(level) || 0));
-  return 50 * safeLevel * (safeLevel + 1);
+  return 500 * safeLevel * (safeLevel + 1);
 }
 
 /**
@@ -19,7 +19,7 @@ function getXpForLevel(level) {
  */
 function getLevelFromXp(xp) {
   const safeXp = Math.max(0, Number(xp) || 0);
-  return Math.floor((-1 + Math.sqrt(1 + (4 * safeXp) / 50)) / 2);
+  return Math.floor((-1 + Math.sqrt(1 + (4 * safeXp) / 500)) / 2);
 }
 
 /**

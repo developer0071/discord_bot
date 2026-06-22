@@ -39,6 +39,28 @@ async function sendLevelUpAnnouncement(context, userId, oldLevel, newLevel, guil
     const userData = cache.getUser(userId);
     const totalXp = userData?.xp || 0;
 
+    const LEVEL_ROLES = {
+      10: '1518417040812281906',
+      20: '1518417103705870398',
+      30: '1518417175457824768',
+      40: '1518417336196137040',
+      50: '1518417288288669748'
+    };
+
+    if (member) {
+      for (const [levelStr, roleId] of Object.entries(LEVEL_ROLES)) {
+        const levelReq = parseInt(levelStr, 10);
+        if (oldLevel < levelReq && newLevel >= levelReq) {
+          try {
+            await member.roles.add(roleId);
+            console.log(`[levelUp] Assigned level ${levelReq} role to ${userId}`);
+          } catch (err) {
+            console.error(`[levelUp] Failed to assign level ${levelReq} role to ${userId}:`, err);
+          }
+        }
+      }
+    }
+
     const embed = new EmbedBuilder()
       .setTitle('Level-up!')
       .setDescription(`Congratulations, <@${userId}> you have reached level ${newLevel}. Keep it up!`)
