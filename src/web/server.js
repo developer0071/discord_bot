@@ -398,13 +398,34 @@ load();
           families: profile[q.userId]?.families || [],
           joinedAt: tsToMs(q.joinedAt),
         })),
-        leveling: cache.getAllUsers().map((u) => ({
-          userId: u.userId,
-          discord: u.username || 'Unknown',
-          roblox: profile[u.userId]?.robloxUsername || '',
-          xp: u.xp || 0,
-          level: u.level || 0,
-        })),
+        leveling: await (async () => {
+          try {
+            const g = guild();
+            if (!g) return [];
+            // Fetch all guild members (force cache refresh)
+            await g.members.fetch();
+            const cadetRoleId = process.env.REGIMENT_ROLE_ID;      // 1512684275714097263
+            const recruitRoleId = process.env.RECRUIT_ROLE_ID;     // 1512943823154581635
+            const allMembers = g.members.cache.filter(m =>
+              !m.user.bot &&
+              (m.roles.cache.has(cadetRoleId) || m.roles.cache.has(recruitRoleId))
+            );
+            return allMembers.map(m => {
+              const userData = cache.getUser(m.id) || {};
+              return {
+                userId: m.id,
+                discord: m.user.username,
+                displayName: m.displayName,
+                roblox: profile[m.id]?.robloxUsername || '',
+                xp: userData.xp || 0,
+                level: userData.level || 0,
+              };
+            });
+          } catch (e) {
+            console.error('[web] leveling guild fetch error:', e);
+            return [];
+          }
+        })(),
         logs: isReadOnly ? [] : logs.map((l) => ({ action: l.action, target: l.target, detail: l.detail, at: tsToMs(l.at) })),
         feedback: isReadOnly ? [] : users
           .filter((u) => u.feedback)

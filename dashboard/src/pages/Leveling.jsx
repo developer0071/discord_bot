@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { getApiBase } from '../utils/api';
 import './Members.css';
 
 export default function Leveling() {
-  const { leveling, isMod, triggerToast, reloadData, searchQuery } = useApp();
+  const { leveling, isMod, showToast, loadData, searchQuery } = useApp();
   const [selectedUser, setSelectedUser] = useState(null);
   const [actionType, setActionType] = useState('add_xp');
   const [actionValue, setActionValue] = useState('');
@@ -14,14 +15,22 @@ export default function Leveling() {
     return 500 * level * (level + 1);
   }
 
-  // Filter and sort leveling array by level descending, then XP descending
-  const filtered = leveling
+  // Use the members array (which already has xp and level from cache)
+  // Filter by search query and sort by level desc, then xp desc
+  const filtered = (leveling || [])
     .filter(m => 
       !searchQuery || 
       m.discord.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.roblox.toLowerCase().includes(searchQuery.toLowerCase())
+      (m.roblox && m.roblox.toLowerCase().includes(searchQuery.toLowerCase()))
     )
-    .sort((a, b) => b.level - a.level || b.xp - a.xp);
+    .sort((a, b) => {
+      const aLevel = a.level || 0;
+      const bLevel = b.level || 0;
+      const aXp = a.xp || 0;
+      const bXp = b.xp || 0;
+      if (bLevel !== aLevel) return bLevel - aLevel;
+      return bXp - aXp;
+    });
 
   const handleAction = async (e) => {
     e.preventDefault();
@@ -30,7 +39,7 @@ export default function Leveling() {
     setLoading(true);
     try {
       const token = localStorage.getItem('dash_token');
-      const res = await fetch(import.meta.env.VITE_API_URL + '/api/leveling', {
+      const res = await fetch(getApiBase() + '/api/leveling', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -46,12 +55,12 @@ export default function Leveling() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Action failed');
 
-      triggerToast(`Successfully updated ${selectedUser.discord}'s leveling stats.`, 'success');
+      showToast(`Successfully updated ${selectedUser.discord}'s leveling stats.`, 'success');
       setSelectedUser(null);
       setActionValue('');
-      await reloadData();
+      await loadData();
     } catch (err) {
-      triggerToast(err.message, 'error');
+      showToast(err.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -192,7 +201,7 @@ export default function Leveling() {
                     placeholder={actionType.includes('level') ? "e.g. 50" : "e.g. 1000"}
                     className="form-input"
                   />
-                  {actionType === 'add_xp' && <p className="form-hint">Adds this amount to their current {selectedUser.xp} XP.</p>}
+                  {actionType === 'add_xp' && <p className="form-hint">Adds this amount to their current {selectedUser.xp || 0} XP.</p>}
                   {actionType === 'set_level' && <p className="form-hint" style={{color: '#ff4757'}}>Warning: This will set their total XP to precisely the amount required for this level.</p>}
                 </div>
               )}
