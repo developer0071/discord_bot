@@ -7,11 +7,12 @@ const NAV_ITEMS = [
   { key: 'feedback',  path: '/feedback',  icon: 'fa-message',            label: 'Feedback',      section: 'Management' },
   { key: 'giveaways', path: '/giveaways', icon: 'fa-gift',               label: 'Giveaways',     section: 'Management', badgeKey: 'giveawayCount' },
   { key: 'chat',      path: '/chat',      icon: 'fa-comments',           label: 'Live Chat',     section: 'Management' },
+  { key: 'leveling',  path: '/leveling',  icon: 'fa-bolt',               label: 'Leveling',      section: 'Management' },
   { key: 'logs',      path: '/audit',     icon: 'fa-scroll',             label: 'Audit Log',     section: 'System' },
   { key: 'settings',  path: '/settings',  icon: 'fa-gear',               label: 'Settings',      section: 'System' },
 ];
 
-const READONLY_TABS = new Set(['members', 'queue', 'chat']);
+const READONLY_TABS = new Set(['members', 'queue', 'chat', 'leveling']);
 
 export default function Sidebar() {
   const { members, queue, giveaways, isMod } = useApp();

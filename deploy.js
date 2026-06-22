@@ -13,6 +13,24 @@ try {
   fs.writeFileSync(path.join('dashboard', 'index.html'), modified);
   console.log('✅ Temporarily copied index.html to dashboard/ for Vercel deployment.');
   
+  // Create dashboard/public directory to copy static assets
+  const publicDir = path.join('dashboard', 'public');
+  if (!fs.existsSync(publicDir)) {
+    fs.mkdirSync(publicDir);
+  }
+  
+  // Copy logo.png
+  if (fs.existsSync('logo.png')) {
+    fs.copyFileSync('logo.png', path.join(publicDir, 'logo.png'));
+    console.log('✅ Copied logo.png to dashboard/public/');
+  }
+  
+  // Copy family folder
+  if (fs.existsSync('family')) {
+    execSync('xcopy /E /I /Y family dashboard\\public\\family', { stdio: 'inherit' });
+    console.log('✅ Copied family/ folder to dashboard/public/');
+  }
+  
   // Run vercel deploy
   console.log('🚀 Running Vercel deployment...');
   execSync('cd dashboard && vercel --prod', { stdio: 'inherit' });
@@ -26,6 +44,11 @@ try {
     if (fs.existsSync(path.join('dashboard', 'index.html'))) {
       fs.unlinkSync(path.join('dashboard', 'index.html'));
       console.log('🧹 Cleaned up temporary dashboard/index.html');
+    }
+    const publicDir = path.join('dashboard', 'public');
+    if (fs.existsSync(publicDir)) {
+      fs.rmSync(publicDir, { recursive: true, force: true });
+      console.log('🧹 Cleaned up temporary dashboard/public/');
     }
   } catch (e) {
     // Ignore cleanup errors
