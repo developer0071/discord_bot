@@ -105,10 +105,12 @@ export default function Leveling() {
               </tr>
             ) : (
               filtered.map((m, index) => {
-                const currentLevelXp = getXpForLevel(m.level);
-                const nextLevelXp = getXpForLevel(m.level + 1);
+                const xp = m.xp || 0;
+                const level = m.level || 0;
+                const currentLevelXp = getXpForLevel(level);
+                const nextLevelXp = getXpForLevel(level + 1);
                 const progressNeeded = nextLevelXp - currentLevelXp;
-                const progressMade = m.xp - currentLevelXp;
+                const progressMade = xp - currentLevelXp;
                 const progressPercent = Math.min(100, Math.max(0, (progressMade / progressNeeded) * 100));
 
                 return (
@@ -130,18 +132,18 @@ export default function Leveling() {
                     <td>
                       <span className="status-badge" style={{ background: 'rgba(255, 215, 0, 0.1)', color: '#FFD700', border: '1px solid rgba(255, 215, 0, 0.2)' }}>
                         <i className="fas fa-star" style={{ marginRight: '6px' }}></i>
-                        Level {m.level}
+                        Level {level}
                       </span>
                     </td>
                     <td>
                       <span style={{ fontFamily: 'monospace', fontSize: '14px', color: '#a0a0b0' }}>
-                        {m.xp.toLocaleString()} XP
+                        {xp.toLocaleString()} XP
                       </span>
                     </td>
                     <td style={{ minWidth: '200px' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#7c666a' }}>
-                          <span>{m.xp.toLocaleString()}</span>
+                          <span>{xp.toLocaleString()}</span>
                           <span>{nextLevelXp.toLocaleString()}</span>
                         </div>
                         <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden' }}>
