@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import './Members.css';
 
 export default function Leveling() {
-  const { members, isMod, triggerToast, reloadData } = useApp();
+  const { leveling, isMod, triggerToast, reloadData } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [actionType, setActionType] = useState('add_xp');
@@ -15,8 +15,8 @@ export default function Leveling() {
     return 500 * level * (level + 1);
   }
 
-  // Filter and sort members by level descending, then XP descending
-  const filtered = members
+  // Filter and sort leveling array by level descending, then XP descending
+  const filtered = leveling
     .filter(m => 
       m.discord.toLowerCase().includes(searchTerm.toLowerCase()) ||
       m.roblox.toLowerCase().includes(searchTerm.toLowerCase())

@@ -398,6 +398,13 @@ load();
           families: profile[q.userId]?.families || [],
           joinedAt: tsToMs(q.joinedAt),
         })),
+        leveling: cache.getAllUsers().map((u) => ({
+          userId: u.userId,
+          discord: u.username || 'Unknown',
+          roblox: profile[u.userId]?.robloxUsername || '',
+          xp: u.xp || 0,
+          level: u.level || 0,
+        })),
         logs: isReadOnly ? [] : logs.map((l) => ({ action: l.action, target: l.target, detail: l.detail, at: tsToMs(l.at) })),
         feedback: isReadOnly ? [] : users
           .filter((u) => u.feedback)
