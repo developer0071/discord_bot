@@ -159,7 +159,7 @@ export default function Leveling() {
                           title="Manage Leveling"
                           style={{ color: '#ff4757', background: 'rgba(255, 71, 87, 0.1)' }}
                         >
-                          <i className="fas fa-bolt"></i> Boost
+                          <i className="fas fa-bolt"></i>
                         </button>
                       </td>
                     )}
