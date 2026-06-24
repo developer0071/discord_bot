@@ -695,7 +695,10 @@ load();
       
       await channel.send(payload);
       res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) {
+      console.error('SEND ERROR:', e);
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // ── Giveaways (dashboard-only management) ──
