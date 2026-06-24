@@ -130,32 +130,58 @@ export default function Chat() {
           ))}
         </div>
 
-        <div style={{ padding: 16, borderTop: '1px solid var(--border)', background: 'var(--bg-surface)', display: 'flex', gap: 12, position: 'relative' }}>
-          {showEmoji && (
-            <div style={{ position: 'absolute', bottom: '100%', right: 20, zIndex: 100 }}>
-              <emoji-picker ref={pickerRef} class="dark"></emoji-picker>
+        <div style={{ padding: 16, borderTop: '1px solid var(--border)', background: 'var(--bg-surface)', display: 'flex', flexDirection: 'column', gap: 12, position: 'relative' }}>
+          {file && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg-base)', borderRadius: 8, border: '1px solid var(--border)', width: 'fit-content' }}>
+              <i className="fa-solid fa-file" style={{ color: 'var(--accent)' }} />
+              <span style={{ fontSize: 13, color: 'var(--text-primary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+              </span>
+              <button 
+                className="btn btn-ghost" 
+                style={{ padding: '4px 8px', minHeight: 'unset', height: 'auto', marginLeft: 4 }}
+                onClick={() => { setFile(null); document.getElementById('file-upload').value = ''; }}
+              >
+                <i className="fa-solid fa-xmark" />
+              </button>
             </div>
           )}
-          <input 
-            type="file" 
-            id="file-upload" 
-            style={{ display: 'none' }} 
-            onChange={(e) => setFile(e.target.files[0] || null)} 
-          />
-          <button className="btn btn-ghost" onClick={() => document.getElementById('file-upload').click()}>
-             <i className="fa-solid fa-paperclip" style={{ color: file ? 'var(--accent)' : 'inherit' }} />
-          </button>
-          <button className="btn btn-ghost" onClick={() => setShowEmoji(!showEmoji)}><i className="fa-regular fa-face-smile" /></button>
-          <textarea
-            ref={inputRef}
-            style={{ flex: 1, background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '14px 16px', borderRadius: 12, fontFamily: 'Space Grotesk', fontSize: 15, resize: 'none', height: 52 }}
-            placeholder="Type a message... (Shift+Enter for new line)"
-            value={message}
-            onChange={e => setMessage(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={isSending}
-          />
-          <button className="btn btn-primary" onClick={handleSend} disabled={isSending || (!message.trim() && !file)}><i className="fa-solid fa-paper-plane" /></button>
+
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            {showEmoji && (
+              <div style={{ position: 'absolute', bottom: '100%', right: 20, zIndex: 100 }}>
+                <emoji-picker ref={pickerRef} class="dark"></emoji-picker>
+              </div>
+            )}
+            <input 
+              type="file" 
+              id="file-upload" 
+              style={{ display: 'none' }} 
+              onChange={(e) => {
+                const f = e.target.files[0];
+                if (f && f.size > 25 * 1024 * 1024) {
+                  showToast('File is too large! Maximum allowed is 25MB.', 'error');
+                  e.target.value = '';
+                  return;
+                }
+                setFile(f || null);
+              }} 
+            />
+            <button className="btn btn-ghost" onClick={() => document.getElementById('file-upload').click()}>
+               <i className="fa-solid fa-paperclip" style={{ color: file ? 'var(--accent)' : 'inherit' }} />
+            </button>
+            <button className="btn btn-ghost" onClick={() => setShowEmoji(!showEmoji)}><i className="fa-regular fa-face-smile" /></button>
+            <textarea
+              ref={inputRef}
+              style={{ flex: 1, background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '14px 16px', borderRadius: 12, fontFamily: 'Space Grotesk', fontSize: 15, resize: 'none', height: 52 }}
+              placeholder="Type a message... (Shift+Enter for new line)"
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isSending}
+            />
+            <button className="btn btn-primary" onClick={handleSend} disabled={isSending || (!message.trim() && !file)}><i className="fa-solid fa-paper-plane" /></button>
+          </div>
         </div>
       </div>
     </div>
