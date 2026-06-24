@@ -17,8 +17,8 @@ module.exports = {
     },
     {
       name: 'discord-announcement',
-      script: 'reg_announcement/send_message.py',
-      interpreter: 'python3', // Change to 'python' if your VPS uses simply 'python'
+      script: 'reg_announcement/send_message.js',
+      interpreter: 'node', 
       cron_restart: '15 0,6,12,18 * * *',
       autorestart: false,
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
