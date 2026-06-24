@@ -142,7 +142,8 @@ async function sendToChannel(guild, channelId, payload) {
 }
 
 async function notifyAdmins(guild, embed) {
-  await sendToChannel(guild, process.env.LOG_CHANNEL_ID, { embeds: [embed] });
+  const channelId = process.env.TICKET_OWNERS_CHANNEL_ID || process.env.LOG_CHANNEL_ID;
+  await sendToChannel(guild, channelId, { embeds: [embed] });
 }
 
 async function sendWelcomeMessage(guild, member, embed) {
