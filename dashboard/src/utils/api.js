@@ -43,13 +43,18 @@ export function logout() {
 
 // Core fetch wrapper with auth
 export async function apiFetch(method, path, body) {
+  const isFormData = body instanceof FormData;
+  const headers = {
+    ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}),
+  };
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   const res = await fetch(getApiBase() + path, {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
+    headers,
+    body: isFormData ? body : (body ? JSON.stringify(body) : undefined),
   });
 
   if (res.status === 401) {

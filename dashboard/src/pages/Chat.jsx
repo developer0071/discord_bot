@@ -8,6 +8,7 @@ export default function Chat() {
   const [channels, setChannels] = useState([]);
   const [selectedChannel, setSelectedChannel] = useState('');
   const [message, setMessage] = useState('');
+  const [file, setFile] = useState(null);
   const [history, setHistory] = useState([]);
   const [isSending, setIsSending] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
@@ -48,15 +49,26 @@ export default function Chat() {
 
   const handleSend = async () => {
     const content = message.trim();
-    if (!content) return;
+    if (!content && !file) return;
     if (!selectedChannel) { showToast('Please select a channel', 'error'); return; }
 
     setIsSending(true);
     try {
-      await apiFetch('POST', '/api/chat/send', { channelId: selectedChannel, content });
+      let payload;
+      if (file) {
+        payload = new FormData();
+        payload.append('channelId', selectedChannel);
+        payload.append('content', content);
+        payload.append('file', file);
+      } else {
+        payload = { channelId: selectedChannel, content };
+      }
+
+      await apiFetch('POST', '/api/chat/send', payload);
       const channelName = channels.find(c => c.id === selectedChannel)?.name || selectedChannel;
-      setHistory(prev => [...prev, { content, channelName, time: new Date() }]);
+      setHistory(prev => [...prev, { content: content + (file ? `\n[Attached: ${file.name}]` : ''), channelName, time: new Date() }]);
       setMessage('');
+      setFile(null);
       setShowEmoji(false);
       setTimeout(() => {
         if (chatBodyRef.current) chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
@@ -124,6 +136,15 @@ export default function Chat() {
               <emoji-picker ref={pickerRef} class="dark"></emoji-picker>
             </div>
           )}
+          <input 
+            type="file" 
+            id="file-upload" 
+            style={{ display: 'none' }} 
+            onChange={(e) => setFile(e.target.files[0] || null)} 
+          />
+          <button className="btn btn-ghost" onClick={() => document.getElementById('file-upload').click()}>
+             <i className="fa-solid fa-paperclip" style={{ color: file ? 'var(--accent)' : 'inherit' }} />
+          </button>
           <button className="btn btn-ghost" onClick={() => setShowEmoji(!showEmoji)}><i className="fa-regular fa-face-smile" /></button>
           <textarea
             ref={inputRef}
@@ -134,7 +155,7 @@ export default function Chat() {
             onKeyDown={handleKeyDown}
             disabled={isSending}
           />
-          <button className="btn btn-primary" onClick={handleSend} disabled={isSending || !message.trim()}><i className="fa-solid fa-paper-plane" /></button>
+          <button className="btn btn-primary" onClick={handleSend} disabled={isSending || (!message.trim() && !file)}><i className="fa-solid fa-paper-plane" /></button>
         </div>
       </div>
     </div>

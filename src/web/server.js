@@ -1,5 +1,7 @@
 const path = require('path');
 const express = require('express');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } }); // 25MB max
 
 const fb = require('../utils/firebase');
 const auth = require('./auth');
@@ -669,11 +671,11 @@ load();
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  app.post('/api/chat/send', requireModSide, rlWrite, async (req, res) => {
+  app.post('/api/chat/send', requireModSide, rlWrite, upload.single('file'), async (req, res) => {
     try {
       const { channelId, content } = req.body;
-      if (!channelId || !content || typeof content !== 'string') {
-        return res.status(400).json({ error: 'Channel ID and content are required' });
+      if (!channelId || (!content && !req.file)) {
+        return res.status(400).json({ error: 'Channel ID and content or file are required' });
       }
       const g = guild();
       if (!g) return res.status(500).json({ error: 'Guild not found' });
@@ -681,7 +683,17 @@ load();
       if (!channel || !channel.isTextBased()) {
         return res.status(404).json({ error: 'Text channel not found' });
       }
-      await channel.send({ content: content.slice(0, 2000) });
+      
+      const payload = {};
+      if (content && typeof content === 'string') payload.content = content.slice(0, 2000);
+      if (req.file) {
+        payload.files = [{
+          attachment: req.file.buffer,
+          name: req.file.originalname
+        }];
+      }
+      
+      await channel.send(payload);
       res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
