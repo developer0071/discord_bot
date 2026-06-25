@@ -10,7 +10,6 @@ const { assignRegimentRole, removeRegimentRole } = require('../utils/helpers');
 const { promoteFromQueue } = require('../events/guildMemberRemove');
 const giveawayUtil = require('../utils/giveaway');
 const { RateLimiter } = require('../utils/ratelimit');
-const cache = require('../leveling/cache');
 
 // Firestore Timestamp → epoch ms (or null).
 function tsToMs(ts) {
@@ -380,7 +379,6 @@ load();
         status,
         settings: isReadOnly ? {} : settings,
         members: members.map((m) => {
-          const userData = cache.getUser(m.userId) || {};
           return {
             userId: m.userId,
             discord: m.username,
@@ -388,8 +386,6 @@ load();
             families: profile[m.userId]?.families || [],
             status: profile[m.userId]?.status || 'active',
             joinedAt: tsToMs(m.joinedAt),
-            xp: userData.xp || 0,
-            level: userData.level || 0,
           };
         }),
         queue: queue.map((q) => ({
@@ -400,34 +396,6 @@ load();
           families: profile[q.userId]?.families || [],
           joinedAt: tsToMs(q.joinedAt),
         })),
-        leveling: await (async () => {
-          try {
-            const g = guild();
-            if (!g) return [];
-            // Fetch all guild members (force cache refresh)
-            await g.members.fetch();
-            const cadetRoleId = process.env.REGIMENT_ROLE_ID;      // 1512684275714097263
-            const recruitRoleId = process.env.RECRUIT_ROLE_ID;     // 1512943823154581635
-            const allMembers = g.members.cache.filter(m =>
-              !m.user.bot &&
-              (m.roles.cache.has(cadetRoleId) || m.roles.cache.has(recruitRoleId))
-            );
-            return allMembers.map(m => {
-              const userData = cache.getUser(m.id) || {};
-              return {
-                userId: m.id,
-                discord: m.user.username,
-                displayName: m.displayName,
-                roblox: profile[m.id]?.robloxUsername || '',
-                xp: userData.xp || 0,
-                level: userData.level || 0,
-              };
-            });
-          } catch (e) {
-            console.error('[web] leveling guild fetch error:', e);
-            return [];
-          }
-        })(),
         logs: isReadOnly ? [] : logs.map((l) => ({ action: l.action, target: l.target, detail: l.detail, at: tsToMs(l.at) })),
         feedback: isReadOnly ? [] : users
           .filter((u) => u.feedback)
@@ -448,69 +416,6 @@ load();
     }
   });
 
-  // ── Leveling Management (Boost, Set Level, Reset) ──
-  app.post('/api/leveling', requireModSide, rlWrite, async (req, res) => {
-    try {
-      const { userId, action, amount } = req.body;
-      if (!userId || !action) return res.status(400).json({ error: 'Missing userId or action' });
-      
-      const { sendLevelUpAnnouncement } = require('../leveling/levelUp');
-      const { getLevelFromXp, getXpForLevel } = require('../leveling/xp');
-      const metrics = require('../leveling/metrics');
-      
-      const userData = cache.getUser(userId) || { xp: 0, level: 0 };
-      let newXp = userData.xp;
-      let newLevel = userData.level;
-      
-      const val = parseInt(amount, 10);
-      
-      if (action === 'add_xp') {
-        if (isNaN(val) || val <= 0) return res.status(400).json({ error: 'Invalid amount' });
-        newXp += val;
-        newLevel = getLevelFromXp(newXp);
-      } else if (action === 'set_xp') {
-        if (isNaN(val) || val < 0) return res.status(400).json({ error: 'Invalid amount' });
-        newXp = val;
-        newLevel = getLevelFromXp(newXp);
-      } else if (action === 'set_level') {
-        if (isNaN(val) || val < 0) return res.status(400).json({ error: 'Invalid level' });
-        newLevel = val;
-        newXp = getXpForLevel(newLevel);
-      } else if (action === 'reset') {
-        newXp = 0;
-        newLevel = 0;
-      } else {
-        return res.status(400).json({ error: 'Unknown action' });
-      }
-      
-      const oldLevel = userData.level;
-      
-      // Update cache
-      cache.setUser(userId, { xp: newXp, level: newLevel });
-      
-      // Log it
-      await log('LEVELING_MODIFIED', req.user.tag, `Action: ${action}, UserId: ${userId}, NewXP: ${newXp}, NewLevel: ${newLevel}`);
-      
-      // If level changed, trigger level up role assignment and announcement
-      if (newLevel !== oldLevel) {
-        // Construct mock context for levelUp.js
-        const context = {
-          client,
-          cache,
-          firebase: require('../leveling/firebaseXP'),
-          metrics
-        };
-        await sendLevelUpAnnouncement(context, userId, oldLevel, newLevel, guild().id);
-      }
-      
-      res.json({ ok: true, xp: newXp, level: newLevel });
-    } catch (e) {
-      console.error('[web] /api/leveling error:', e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // ── Accept a specific user from the queue (assign role, record member) ──
   app.post('/api/accept', requireModSide, rlWrite, async (req, res) => {
     try {
       const { userId } = req.body;
