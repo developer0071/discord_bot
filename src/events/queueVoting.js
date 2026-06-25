@@ -1,11 +1,11 @@
 const { getDb, getFullQueue, getRegimentStatus } = require('../utils/firebase');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 
-function generateProgressBar(value, max, length = 15) {
+function generateProgressBar(value, max, length = 16) {
   const percentage = Math.max(0, Math.min(value / max, 1));
   const filledCount = Math.round(percentage * length);
   const emptyCount = length - filledCount;
-  return '█'.repeat(filledCount) + '░'.repeat(emptyCount);
+  return '▰'.repeat(filledCount) + '▱'.repeat(emptyCount);
 }
 
 const QUEUE_VOTING_CHANNEL_ID = '1519725084808450139';
@@ -60,12 +60,12 @@ async function updateVotingMessage(client) {
       } catch(e) {}
 
       const votes = u.votes || 0;
-      const progress = generateProgressBar(votes, scaleMax, 15);
+      const progress = generateProgressBar(votes, scaleMax, 16);
 
       const userEmbed = new EmbedBuilder()
-        .setColor(0x2b2d31)
-        .setAuthor({ name: `#${u.position} — ${u.username}`, iconURL: avatarURL })
-        .setDescription(`**Votes:** ${votes}\n\`${progress}\``);
+        .setColor(0x5cb8b2)
+        .setThumbnail(avatarURL)
+        .setDescription(`## @${u.username}\n**Position:** #${u.position}  |  **Votes:** ${votes} / ${scaleMax}\n\n${progress}`);
 
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
