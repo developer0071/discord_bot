@@ -51,39 +51,49 @@ def run_dispatcher():
         "tts": False
     }
 
-    try:
-        response = requests.post(
-            api_endpoint,
-            json=request_payload,
-            headers=request_headers,
-            impersonate="chrome120",
-            proxies=proxies,
-            timeout=30
-        )
+    retries = 3
+    while retries > 0:
+        try:
+            response = requests.post(
+                api_endpoint,
+                json=request_payload,
+                headers=request_headers,
+                impersonate="chrome120",
+                proxies=proxies,
+                timeout=30
+            )
 
-        if response.status_code in [200, 201]:
-            print("[INFO] Message delivered successfully.")
-            sys.exit(0)
-        elif response.status_code == 401:
-            print("[CRITICAL] 401 Unauthorized — token is invalid or expired.", file=sys.stderr)
-            print(f"[DEBUG] Response: {response.text}", file=sys.stderr)
-            sys.exit(1)
-        elif response.status_code == 403:
-            print("[CRITICAL] 403 Forbidden — no permission to send in this channel.", file=sys.stderr)
-            print(f"[DEBUG] Response: {response.text}", file=sys.stderr)
-            sys.exit(1)
-        elif response.status_code == 429:
-            retry_after = response.json().get("retry_after", 5)
-            print(f"[WARN] Rate limited. Retry after {retry_after}s.", file=sys.stderr)
-            sys.exit(1)
-        else:
-            print(f"[ERROR] Unexpected status: {response.status_code}", file=sys.stderr)
-            print(f"[DEBUG] Response: {response.text}", file=sys.stderr)
-            sys.exit(1)
+            if response.status_code in [200, 201]:
+                print("[INFO] Message delivered successfully.")
+                sys.exit(0)
+            elif response.status_code == 401:
+                print("[CRITICAL] 401 Unauthorized — token is invalid or expired.", file=sys.stderr)
+                print(f"[DEBUG] Response: {response.text}", file=sys.stderr)
+                sys.exit(1)
+            elif response.status_code == 403:
+                print("[CRITICAL] 403 Forbidden — no permission to send in this channel.", file=sys.stderr)
+                print(f"[DEBUG] Response: {response.text}", file=sys.stderr)
+                sys.exit(1)
+            elif response.status_code == 429:
+                try:
+                    retry_after = float(response.json().get("retry_after", 5))
+                except Exception:
+                    retry_after = 5.0
+                print(f"[WARN] Rate limited. Waiting {retry_after} seconds before retrying...", file=sys.stderr)
+                time.sleep(retry_after)
+                retries -= 1
+                continue
+            else:
+                print(f"[ERROR] Unexpected status: {response.status_code}", file=sys.stderr)
+                print(f"[DEBUG] Response: {response.text}", file=sys.stderr)
+                sys.exit(1)
 
-    except Exception as e:
-        print(f"[CRITICAL] Network exception: {e}", file=sys.stderr)
-        sys.exit(1)
+        except Exception as e:
+            print(f"[CRITICAL] Network exception: {e}", file=sys.stderr)
+            sys.exit(1)
+            
+    print("[CRITICAL] Failed to send message after maximum retries due to rate limits.", file=sys.stderr)
+    sys.exit(1)
 
 if __name__ == "__main__":
     run_dispatcher()

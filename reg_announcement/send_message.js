@@ -57,31 +57,43 @@ async function runDispatcher() {
         axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
     }
 
-    try {
-        const response = await axios.post(apiEndpoint, requestPayload, axiosConfig);
-        if (response.status === 200 || response.status === 201) {
-            console.log("[INFO] Message delivered successfully.");
-            process.exit(0);
-        }
-    } catch (error) {
-        if (error.response) {
-            const status = error.response.status;
-            if (status === 401) {
-                console.error("[CRITICAL] 401 Unauthorized — token is invalid or expired.");
-            } else if (status === 403) {
-                console.error("[CRITICAL] 403 Forbidden — no permission to send in this channel.");
-            } else if (status === 429) {
-                const retryAfter = error.response.data?.retry_after || 5;
-                console.error(`[WARN] Rate limited. Retry after ${retryAfter}s.`);
-            } else {
-                console.error(`[ERROR] Unexpected status: ${status}`);
+        let retries = 3;
+        while (retries > 0) {
+            try {
+                const response = await axios.post(apiEndpoint, requestPayload, axiosConfig);
+                if (response.status === 200 || response.status === 201) {
+                    console.log("[INFO] Message delivered successfully.");
+                    process.exit(0);
+                }
+            } catch (error) {
+                if (error.response) {
+                    const status = error.response.status;
+                    if (status === 401) {
+                        console.error("[CRITICAL] 401 Unauthorized — token is invalid or expired.");
+                        process.exit(1);
+                    } else if (status === 403) {
+                        console.error("[CRITICAL] 403 Forbidden — no permission to send in this channel.");
+                        process.exit(1);
+                    } else if (status === 429) {
+                        // Discord's retry_after is usually in seconds (for older APIs) or milliseconds.
+                        // However, axios response data for discord usually has retry_after in seconds. 
+                        const retryAfter = error.response.data?.retry_after || 5;
+                        console.log(`[WARN] Rate limited. Waiting for ${retryAfter} seconds before retrying...`);
+                        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+                        retries--;
+                        continue;
+                    } else {
+                        console.error(`[ERROR] Unexpected status: ${status}`);
+                    }
+                    console.error(`[DEBUG] Response: ${JSON.stringify(error.response.data)}`);
+                } else {
+                    console.error(`[CRITICAL] Network exception: ${error.message}`);
+                }
+                process.exit(1);
             }
-            console.error(`[DEBUG] Response: ${JSON.stringify(error.response.data)}`);
-        } else {
-            console.error(`[CRITICAL] Network exception: ${error.message}`);
         }
+        console.error("[CRITICAL] Failed to send message after maximum retries due to rate limits.");
         process.exit(1);
-    }
 }
 
 runDispatcher();
