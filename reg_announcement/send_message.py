@@ -37,7 +37,7 @@ def run_dispatcher():
     api_endpoint = f"https://discord.com/api/v10/channels/{channel_id}/messages"
 
     request_headers = {
-        "Authorization": auth_token,
+        "Authorization": auth_token if auth_token.startswith("Bot ") else f"Bot {auth_token}",
         "Content-Type": "application/json",
         "Accept": "*/*",
         "Accept-Language": "en-US,en;q=0.9",

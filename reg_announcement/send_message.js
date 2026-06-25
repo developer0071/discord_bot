@@ -10,12 +10,12 @@ async function runDispatcher() {
     console.log(`[INFO] Sleeping for ${sleepDuration} seconds before sending...`);
     await new Promise(resolve => setTimeout(resolve, sleepDuration * 1000));
 
-    const authToken = (process.env.DISCORD_TOKEN || "").trim();
+    const authToken = (process.env.USER_TOKEN || "").trim();
     const channelId = (process.env.ANNOUNCEMENT_CHANNEL_ID || "").trim();
     const proxyUrl = (process.env.HTTP_PROXY || "").trim();
 
     if (!authToken || !channelId) {
-        console.error("[CRITICAL] Missing DISCORD_TOKEN or ANNOUNCEMENT_CHANNEL_ID.");
+        console.error("[CRITICAL] Missing USER_TOKEN or ANNOUNCEMENT_CHANNEL_ID.");
         process.exit(1);
     }
 
