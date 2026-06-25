@@ -12,10 +12,11 @@ const {
 const guildMemberAdd    = require('./events/guildMemberAdd');
 const guildMemberRemove = require('./events/guildMemberRemove');
 const messageCreate     = require('./events/messageCreate');
-const { handleButton, handleJoinModal, handleJoinFamilies } = require('./events/buttons');
+const { handleButton, handleJoinModal, handleJoinFamilies, handleVoteQueueSelect } = require('./events/buttons');
 const verification      = require('./events/verification');
 const { startWebServer } = require('./web/server');
 const { startGiveawayScheduler } = require('./utils/giveaway');
+const { initQueueVotingListener } = require('./events/queueVoting');
 const commands          = require('./commands/index');
 const firebaseXP        = require('./leveling/firebaseXP');
 const cache             = require('./leveling/cache');
@@ -45,6 +46,7 @@ client.once('clientReady', async () => {
   await registerSlashCommands();
   startWebServer(client);
   startGiveawayScheduler(client);
+  initQueueVotingListener(client);
 
   // ── Initialize XP System ──
   const isFbReady = firebaseXP.initFirebase();
@@ -112,6 +114,7 @@ client.on('interactionCreate', async interaction => {
     } else if (interaction.isStringSelectMenu()) {
       if (interaction.customId === 'verify_families') await verification.handleFamilySelect(interaction);
       else if (interaction.customId === 'join_families') await handleJoinFamilies(interaction);
+      else if (interaction.customId === 'vote_queue_select') await handleVoteQueueSelect(interaction);
     }
   } catch (err) {
     console.error('[Interaction Error]', err);

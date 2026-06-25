@@ -89,6 +89,7 @@ async function addToQueue(userId, username) {
     joinedAt: admin.firestore.FieldValue.serverTimestamp(),
     ticketNumber: position,
     notified: false,
+    votes: 0,
   });
 
   return { alreadyQueued: false, position };
@@ -102,45 +103,46 @@ async function removeFromQueue(userId) {
 }
 
 /**
- * Get the next person in queue (oldest joinedAt).
+ * Get full queue list ordered by votes (desc), then join time (asc).
+ */
+async function getFullQueue() {
+  const snapshot = await db.collection('queue').get();
+  const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+  docs.sort((a, b) => {
+    const aVotes = a.votes || 0;
+    const bVotes = b.votes || 0;
+    if (aVotes !== bVotes) {
+      return bVotes - aVotes;
+    }
+    const aTime = a.joinedAt ? a.joinedAt.toMillis() : 0;
+    const bTime = b.joinedAt ? b.joinedAt.toMillis() : 0;
+    return aTime - bTime;
+  });
+
+  return docs.map((doc, i) => ({
+    position: i + 1,
+    ...doc,
+  }));
+}
+
+/**
+ * Get the next person in queue (highest votes, then oldest joinedAt).
  * Returns the document data or null.
  */
 async function getNextInQueue() {
-  const snapshot = await db
-    .collection('queue')
-    .orderBy('joinedAt')
-    .limit(1)
-    .get();
-  if (snapshot.empty) return null;
-  return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+  const queue = await getFullQueue();
+  if (queue.length === 0) return null;
+  return queue[0];
 }
 
 /**
  * Get a user's current position in the queue (1-based).
  */
 async function getQueuePosition(userId) {
-  const userDoc = await db.collection('queue').doc(userId).get();
-  if (!userDoc.exists) return null;
-
-  const userJoinedAt = userDoc.data().joinedAt;
-  // Count how many joined before this user
-  const before = await db
-    .collection('queue')
-    .where('joinedAt', '<', userJoinedAt)
-    .get();
-
-  return before.size + 1;
-}
-
-/**
- * Get full queue list ordered by join time.
- */
-async function getFullQueue() {
-  const snapshot = await db.collection('queue').orderBy('joinedAt').get();
-  return snapshot.docs.map((doc, i) => ({
-    position: i + 1,
-    ...doc.data(),
-  }));
+  const queue = await getFullQueue();
+  const user = queue.find(u => u.userId === userId);
+  return user ? user.position : null;
 }
 
 /**
@@ -149,6 +151,45 @@ async function getFullQueue() {
 async function isInQueue(userId) {
   const doc = await db.collection('queue').doc(userId).get();
   return doc.exists;
+}
+
+/**
+ * Cast a vote for a user in the queue.
+ * Limit: 1 vote per voter per 24 hours.
+ */
+async function castQueueVote(voterId, targetUserId) {
+  const voteDoc = await db.collection('queue_votes').doc(voterId).get();
+  const now = Date.now();
+  
+  if (voteDoc.exists) {
+    const lastVotedAt = voteDoc.data().lastVotedAt?.toMillis() || 0;
+    const timeSinceLastVote = now - lastVotedAt;
+    const cooldownMs = 24 * 60 * 60 * 1000; // 24 hours
+    
+    if (timeSinceLastVote < cooldownMs) {
+      const remainingTime = cooldownMs - timeSinceLastVote;
+      return { success: false, remainingTime };
+    }
+  }
+
+  // Verify target user is in queue
+  const targetDoc = await db.collection('queue').doc(targetUserId).get();
+  if (!targetDoc.exists) {
+    return { success: false, error: 'Target user is not in the queue.' };
+  }
+
+  // Use a batch to update both atomically
+  const batch = db.batch();
+  batch.set(db.collection('queue_votes').doc(voterId), {
+    lastVotedAt: admin.firestore.FieldValue.serverTimestamp(),
+    targetUserId
+  });
+  batch.update(db.collection('queue').doc(targetUserId), {
+    votes: admin.firestore.FieldValue.increment(1)
+  });
+
+  await batch.commit();
+  return { success: true };
 }
 
 // ─── Members ─────────────────────────────────────────────────────────────────
@@ -398,4 +439,6 @@ module.exports = {
   getPrivateServers,
   addPrivateServer,
   deletePrivateServer,
+  castQueueVote,
+  getDb: () => db,
 };

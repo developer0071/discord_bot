@@ -62,7 +62,10 @@ function adminNotifyEmbed(member, action = 'joined') {
 
 function queueStatusEmbed(queue, status) {
   const queueList = queue.length > 0
-    ? queue.slice(0, 20).map(u => `**#${u.position}** — ${u.username}`).join('\n')
+    ? queue.slice(0, 20).map(u => {
+        const votes = u.votes || 0;
+        return `**#${u.position}** — ${u.username}` + (votes > 0 ? ` *(${votes} vote${votes === 1 ? '' : 's'})*` : '');
+      }).join('\n')
     : '*Queue is empty*';
 
   return new EmbedBuilder()
