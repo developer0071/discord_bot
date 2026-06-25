@@ -12,7 +12,7 @@ const {
 const guildMemberAdd    = require('./events/guildMemberAdd');
 const guildMemberRemove = require('./events/guildMemberRemove');
 const messageCreate     = require('./events/messageCreate');
-const { handleButton, handleJoinModal, handleJoinFamilies, handleVoteQueueSelect } = require('./events/buttons');
+const { handleButton, handleJoinModal, handleJoinFamilies } = require('./events/buttons');
 const verification      = require('./events/verification');
 const { startWebServer } = require('./web/server');
 const { startGiveawayScheduler } = require('./utils/giveaway');
@@ -114,7 +114,6 @@ client.on('interactionCreate', async interaction => {
     } else if (interaction.isStringSelectMenu()) {
       if (interaction.customId === 'verify_families') await verification.handleFamilySelect(interaction);
       else if (interaction.customId === 'join_families') await handleJoinFamilies(interaction);
-      else if (interaction.customId === 'vote_queue_select') await handleVoteQueueSelect(interaction);
     }
   } catch (err) {
     console.error('[Interaction Error]', err);

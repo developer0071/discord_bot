@@ -226,51 +226,6 @@ async function handleGiveawayEnter(interaction) {
   return interaction.editReply({ embeds: [successEmbed(`You're in! 🎉 **${giveaway.title}** — good luck!`)] });
 }
 
-// ─── Queue Voting ───────────────────────────────────────────────────────────
-async function handleVoteQueue(interaction) {
-  const queue = await getFullQueue();
-  if (queue.length === 0) {
-    return interaction.reply({ embeds: [errorEmbed('The queue is currently empty.')], flags: MessageFlags.Ephemeral });
-  }
-
-  // Discord select menu max is 25 options
-  const options = queue.slice(0, 25).map(u => {
-    return {
-      label: `${u.position}. ${u.username}`,
-      description: `Current Votes: ${u.votes || 0}`,
-      value: u.userId
-    };
-  });
-
-  const select = new StringSelectMenuBuilder()
-    .setCustomId('vote_queue_select')
-    .setPlaceholder('Select a user to vote for')
-    .addOptions(options);
-
-  return interaction.reply({
-    content: 'Please select a user from the queue to boost their chances (1 vote per day):',
-    components: [new ActionRowBuilder().addComponents(select)],
-    flags: MessageFlags.Ephemeral
-  });
-}
-
-async function handleVoteQueueSelect(interaction) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const targetUserId = interaction.values[0];
-
-  const result = await castQueueVote(interaction.user.id, targetUserId);
-
-  if (result.success) {
-    return interaction.editReply({ embeds: [successEmbed(`✅ Your vote has been successfully cast! You can vote again in 24 hours.`)] });
-  } else if (result.remainingTime) {
-    const hours = Math.floor(result.remainingTime / (1000 * 60 * 60));
-    const minutes = Math.floor((result.remainingTime % (1000 * 60 * 60)) / (1000 * 60));
-    return interaction.editReply({ embeds: [errorEmbed(`⏳ You must wait **${hours}h ${minutes}m** before you can vote again.`)] });
-  } else {
-    return interaction.editReply({ embeds: [errorEmbed(`❌ Failed to cast vote: ${result.error || 'Unknown error'}`)] });
-  }
-}
-
 // ─── Router ─────────────────────────────────────────────────────────────────
 const handlers = {
   regiment_queue: handleViewQueue,
@@ -294,14 +249,26 @@ async function handleButton(interaction) {
     return handleTimeVote(interaction);
   }
 
+  // ── Vote for Specific User ──
+  if (interaction.customId.startsWith('vote_user_')) {
+    const targetUserId = interaction.customId.replace('vote_user_', '');
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    
+    const result = await castQueueVote(interaction.user.id, targetUserId);
+    if (result.success) {
+      return interaction.editReply({ embeds: [successEmbed(`✅ Your vote has been successfully cast! You can vote again in 24 hours.`)] });
+    } else if (result.remainingTime) {
+      const hours = Math.floor(result.remainingTime / (1000 * 60 * 60));
+      const minutes = Math.floor((result.remainingTime % (1000 * 60 * 60)) / (1000 * 60));
+      return interaction.editReply({ embeds: [errorEmbed(`⏳ You must wait **${hours}h ${minutes}m** before you can vote again.`)] });
+    } else {
+      return interaction.editReply({ embeds: [errorEmbed(`❌ Failed to cast vote: ${result.error || 'Unknown error'}`)] });
+    }
+  }
+
   // ── Join Regiment → may open a modal or defer+join; manages its own response ──
   if (interaction.customId === 'regiment_join') {
     return handleJoin(interaction);
-  }
-
-  // ── Vote Queue button ──
-  if (interaction.customId === 'vote_queue') {
-    return handleVoteQueue(interaction);
   }
 
   // ── Other regiment buttons (need Firestore work → defer first) ──
@@ -329,4 +296,4 @@ async function handleButton(interaction) {
   }
 }
 
-module.exports = { handleButton, handleJoinModal, handleJoinFamilies, handleVoteQueueSelect };
+module.exports = { handleButton, handleJoinModal, handleJoinFamilies };
