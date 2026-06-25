@@ -14,14 +14,14 @@ def run_dispatcher():
     print(f"[INFO] Sleeping for {sleep_duration} seconds before sending...")
     time.sleep(sleep_duration)
 
-    auth_token = os.environ.get("DISCORD_TOKEN", "").strip()
+    auth_token = os.environ.get("USER_TOKEN", "").strip()
     channel_id = os.environ.get("ANNOUNCEMENT_CHANNEL_ID", "").strip()
     
     proxy_url = os.environ.get("HTTP_PROXY", "").strip()
     proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
 
     if not auth_token or not channel_id:
-        print("[CRITICAL] Missing DISCORD_TOKEN or ANNOUNCEMENT_CHANNEL_ID.", file=sys.stderr)
+        print("[CRITICAL] Missing USER_TOKEN or ANNOUNCEMENT_CHANNEL_ID.", file=sys.stderr)
         sys.exit(1)
 
     try:
@@ -37,7 +37,7 @@ def run_dispatcher():
     api_endpoint = f"https://discord.com/api/v10/channels/{channel_id}/messages"
 
     request_headers = {
-        "Authorization": auth_token if auth_token.startswith("Bot ") else f"Bot {auth_token}",
+        "Authorization": auth_token,
         "Content-Type": "application/json",
         "Accept": "*/*",
         "Accept-Language": "en-US,en;q=0.9",
