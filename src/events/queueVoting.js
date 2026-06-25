@@ -16,7 +16,17 @@ async function buildVotingUIEmbeds(queue, status, client) {
     .setTimestamp();
 
   const embeds = [mainEmbed];
-  const topQueue = queue.slice(0, 9); // Discord allows max 10 embeds per message
+  
+  let topQueue;
+  let showOverflow = false;
+
+  if (queue.length > 9) {
+    topQueue = queue.slice(0, 8);
+    showOverflow = true;
+  } else {
+    topQueue = queue;
+  }
+
   const maxVotesInQueue = queue.length > 0 ? Math.max(...queue.map(u => u.votes || 0)) : 1;
   const scaleMax = Math.max(10, maxVotesInQueue);
 
@@ -38,10 +48,10 @@ async function buildVotingUIEmbeds(queue, status, client) {
     embeds.push(userEmbed);
   }
 
-  if (queue.length > 9) {
+  if (showOverflow) {
     const overflowEmbed = new EmbedBuilder()
       .setColor(0x2b2d31)
-      .setDescription(`*...and ${queue.length - 9} more in queue.*`);
+      .setDescription(`*...and ${queue.length - 8} more in queue.*`);
     embeds.push(overflowEmbed);
   }
 
