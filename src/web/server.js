@@ -35,7 +35,7 @@ function startWebServer(client) {
   // DASHBOARD_ORIGIN=https://your-site.vercel.app if you prefer.
   app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', process.env.DASHBOARD_ORIGIN || '*');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-regiment');
     res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
     if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
