@@ -371,14 +371,16 @@ load();
         return res.json({ ...dataCache[req.regiment], tier: 'mod', canManageGiveaways: canGv });
       }
 
-      const [status, members, queue, users, logs, settings] = await Promise.all([
+      const g = guild();
+      const [status, members, queue, users, logs, settings, allDiscordMembers] = await Promise.all([
         fb.getRegimentStatus(req.regiment), fb.getAllMembers(req.regiment), fb.getFullQueue(req.regiment),
         isReadOnly ? Promise.resolve([]) : fb.getAllUsers(),
         isReadOnly ? Promise.resolve([]) : fb.getLogs(50, req.regiment),
         isReadOnly ? Promise.resolve({}) : fb.getDashboardSettings(req.regiment),
+        g ? g.members.fetch() : Promise.resolve(new Map())
       ]);
       const getAvatar = (id) => {
-        const m = guild().members.cache.get(id);
+        const m = allDiscordMembers.get(id);
         return m ? m.user.displayAvatarURL({ extension: 'png', size: 64 }) : null;
       };
 

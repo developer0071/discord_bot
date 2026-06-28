@@ -45,7 +45,10 @@ export default function Header({ onAddMember, onToggleSidebar }) {
           <i className="fas fa-arrows-rotate" />
         </button>
         {isMod && (
-          <button className="btn btn-primary" onClick={onAddMember}>
+          <button className="btn btn-primary" onClick={() => {
+            if (onAddMember) onAddMember();
+            else window.dispatchEvent(new CustomEvent('open-add-member'));
+          }}>
             <i className="fas fa-plus" /> Add Member
           </button>
         )}

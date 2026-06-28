@@ -70,13 +70,20 @@ async function doJoin(interaction, member, regiment) {
 async function handleJoin(interaction, regiment) {
   const member = interaction.member;
 
-  const inMoonlight = (await isMember(member.id, 'moonlight')) || hasRegimentRole(member, 'moonlight');
-  const inSunshine = (await isMember(member.id, 'sunshine')) || hasRegimentRole(member, 'sunshine');
+  const [moonlightMember, sunshineMember, queued, profile] = await Promise.all([
+    isMember(member.id, 'moonlight'),
+    isMember(member.id, 'sunshine'),
+    isInQueue(member.id, regiment),
+    getUserProfile(member.id)
+  ]);
+
+  const inMoonlight = moonlightMember || hasRegimentRole(member, 'moonlight');
+  const inSunshine = sunshineMember || hasRegimentRole(member, 'sunshine');
 
   if (inMoonlight || inSunshine) {
     return interaction.reply({ embeds: [errorEmbed("You're already in a regiment! 🎖️")], flags: MessageFlags.Ephemeral });
   }
-  if (await isInQueue(member.id, regiment)) {
+  if (queued) {
     const position = await getQueuePosition(member.id, regiment);
     return interaction.reply({ embeds: [errorEmbed(`You're already in the queue at position **#${position}**.`)], flags: MessageFlags.Ephemeral });
   }
@@ -84,7 +91,6 @@ async function handleJoin(interaction, regiment) {
   // We need their Roblox info before adding. If we already collected it at
   // verification, use it automatically. If not (didn't verify / joined before
   // the system existed), pop up the form to collect it first.
-  const profile = await getUserProfile(member.id);
   if (!profile || !profile.robloxUsername) {
     return showJoinModal(interaction, regiment); // showModal must be the first response (no defer)
   }

@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import Modal from '../components/Modal';
 import { getAvatarColor, getInitials, formatDate, statusLabel } from '../utils/helpers';
@@ -105,11 +105,16 @@ export default function Members() {
   };
 
   // ── Modal handlers ──
-  const openAdd = () => {
+  const openAdd = useCallback(() => {
     setEditingMember(null);
     setFormDiscord(''); setFormRoblox(''); setFormStatus('active'); setFormNotes('');
     setAddOpen(true);
-  };
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('open-add-member', openAdd);
+    return () => window.removeEventListener('open-add-member', openAdd);
+  }, [openAdd]);
   const openEdit = (m) => {
     setEditingMember(m);
     setFormDiscord(m.discord); setFormRoblox(m.roblox);
@@ -425,5 +430,3 @@ export default function Members() {
   );
 }
 
-// Expose openAdd for Header component
-Members.openAdd = null;
