@@ -70,6 +70,8 @@ async function doJoin(interaction, member, regiment) {
 async function handleJoin(interaction, regiment) {
   const member = interaction.member;
 
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
   const [moonlightMember, sunshineMember, queued, profile] = await Promise.all([
     isMember(member.id, 'moonlight'),
     isMember(member.id, 'sunshine'),
@@ -81,21 +83,26 @@ async function handleJoin(interaction, regiment) {
   const inSunshine = sunshineMember || hasRegimentRole(member, 'sunshine');
 
   if (inMoonlight || inSunshine) {
-    return interaction.reply({ embeds: [errorEmbed("You're already in a regiment! 🎖️")], flags: MessageFlags.Ephemeral });
+    return interaction.editReply({ embeds: [errorEmbed("You're already in a regiment! 🎖️")] });
   }
   if (queued) {
     const position = await getQueuePosition(member.id, regiment);
-    return interaction.reply({ embeds: [errorEmbed(`You're already in the queue at position **#${position}**.`)], flags: MessageFlags.Ephemeral });
+    return interaction.editReply({ embeds: [errorEmbed(`You're already in the queue at position **#${position}**.`)] });
   }
 
-  // We need their Roblox info before adding. If we already collected it at
-  // verification, use it automatically. If not (didn't verify / joined before
-  // the system existed), pop up the form to collect it first.
   if (!profile || !profile.robloxUsername) {
-    return showJoinModal(interaction, regiment); // showModal must be the first response (no defer)
+    const { ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder } = require('discord.js');
+    const btn = new ButtonBuilder()
+      .setCustomId(`open_join_modal_${regiment}`)
+      .setLabel('Link Roblox Account')
+      .setStyle(ButtonStyle.Success)
+      .setEmoji('🎮');
+    return interaction.editReply({ 
+      embeds: [new EmbedBuilder().setColor(0x5865f2).setDescription("We need your Roblox username before you can join!\n\nClick the button below to link it.")],
+      components: [new ActionRowBuilder().addComponents(btn)]
+    });
   }
 
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   await doJoin(interaction, member, regiment);
 }
 
@@ -277,10 +284,16 @@ async function handleButton(interaction) {
     }
   }
 
-  // ── Join Regiment → may open a modal or defer+join; manages its own response ──
+  // ── Join Regiment → deferred checks, might send a button to open modal ──
   if (interaction.customId.startsWith('regiment_join_')) {
     const r = interaction.customId.replace('regiment_join_', '');
     return handleJoin(interaction, r);
+  }
+
+  // ── The button sent by handleJoin if they need to link Roblox (instant modal) ──
+  if (interaction.customId.startsWith('open_join_modal_')) {
+    const r = interaction.customId.replace('open_join_modal_', '');
+    return showJoinModal(interaction, r);
   }
 
   // ── Other regiment buttons (need Firestore work → defer first) ──
