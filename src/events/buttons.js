@@ -57,7 +57,7 @@ async function doJoin(interaction, member, regiment) {
       });
     }
     await addMember(member.id, member.user.tag, regiment);
-    await notifyAdmins(interaction.guild, adminNotifyEmbed(member, 'joined'));
+    await notifyAdmins(interaction.guild, adminNotifyEmbed(member, 'joined'), regiment);
     return interaction.editReply({ embeds: [welcomeEmbed(member)], components: [] });
   }
 

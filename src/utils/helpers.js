@@ -151,8 +151,13 @@ async function sendToChannel(guild, channelId, payload) {
   await channel.send(payload);
 }
 
-async function notifyAdmins(guild, embed) {
-  const channelId = process.env.TICKET_OWNERS_CHANNEL_ID || process.env.LOG_CHANNEL_ID;
+async function notifyAdmins(guild, embed, regiment = 'moonlight') {
+  let channelId;
+  if (regiment === 'sunshine') {
+    channelId = process.env['TICKET-HOLDERS-SUNSHINE'] || process.env.TICKET_OWNERS_CHANNEL_ID || process.env.LOG_CHANNEL_ID;
+  } else {
+    channelId = process.env.TICKET_OWNERS_CHANNEL_ID || process.env.LOG_CHANNEL_ID;
+  }
   await sendToChannel(guild, channelId, { embeds: [embed] });
 }
 

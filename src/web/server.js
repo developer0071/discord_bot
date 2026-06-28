@@ -261,10 +261,8 @@ load();
 
   // Full dashboard access (mods) — blocks read-only viewers from mutations.
   async function requireModSide(req, res, next) {
-    if (req.user.tier === 'mod') return next();
     const member = await fetchMember(req.user.id);
-    if (member && isModSide(member)) {
-      req.user.tier = 'mod';
+    if (member && isModSide(member, req.regiment)) {
       return next();
     }
     return res.status(403).json({ error: 'You need moderator permissions for this action' });
@@ -299,7 +297,7 @@ load();
 
   async function refreshUserTier(req, res) {
     const member = await fetchMember(req.user.id);
-    const tier = member ? getDashboardTier(member) : null;
+    const tier = member ? getDashboardTier(member, req.regiment) : null;
     if (!tier) {
       res.status(403).json({ error: 'Your dashboard access was revoked' });
       return null;

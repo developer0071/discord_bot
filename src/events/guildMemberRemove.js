@@ -34,7 +34,7 @@ module.exports = {
         const wasInReg = await isMember(member.id, reg);
         if (wasInReg || hasRegimentRole(member, reg)) {
           await removeMember(member.id, reg);
-          await notifyAdmins(member.guild, adminNotifyEmbed(member, 'left'));
+          await notifyAdmins(member.guild, adminNotifyEmbed(member, 'left'), reg);
           console.log(`[LEAVE] ${member.user.tag} removed from ${reg} regiment`);
           await promoteFromQueue(member.guild, reg);
         }
@@ -93,7 +93,7 @@ async function promoteFromQueue(guild, regiment = 'moonlight') {
     }
 
     // Notify admins
-    await notifyAdmins(guild, adminNotifyEmbed(nextMember, 'joined'));
+    await notifyAdmins(guild, adminNotifyEmbed(nextMember, 'joined'), regiment);
     return; // done — promoted one person
   }
 
