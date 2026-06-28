@@ -6,7 +6,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 
 const fb = require('../utils/firebase');
 const auth = require('./auth');
 const { canAccessDashboard, canManage, getDashboardTier, isModSide, canManageGiveaways } = require('../utils/permissions');
-const { assignRegimentRole, removeRegimentRole } = require('../utils/helpers');
+const { assignRegimentRole, removeRegimentRole, adminNotifyEmbed, notifyAdmins } = require('../utils/helpers');
 const { promoteFromQueue } = require('../events/guildMemberRemove');
 const giveawayUtil = require('../utils/giveaway');
 const { RateLimiter } = require('../utils/ratelimit');
@@ -428,6 +428,7 @@ load();
       await fb.removeFromQueue(userId, req.regiment);
       await fb.addMember(userId, member.user.tag, req.regiment);
       log('QUEUE_ACCEPTED', member.user.tag, 'Accepted from queue');
+      await notifyAdmins(guild(), adminNotifyEmbed(member, 'joined'), req.regiment);
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
@@ -450,6 +451,7 @@ load();
       if (member) await removeRegimentRole(member, req.regiment).catch(() => {});
       await fb.removeMember(userId, req.regiment);
       log('MEMBER_KICKED', member?.user.tag || userId, 'Removed from regiment');
+      if (member) await notifyAdmins(guild(), adminNotifyEmbed(member, 'left'), req.regiment);
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
@@ -474,6 +476,7 @@ load();
       if (!(await fb.isMember(member.id, req.regiment))) await fb.addMember(member.id, member.user.tag, req.regiment);
       if (roblox) await fb.saveUserProfile(member.id, { discordId: member.id, discordTag: member.user.tag, robloxUsername: roblox });
       log('MEMBER_ADDED', member.user.tag, 'Added to regiment');
+      await notifyAdmins(guild(), adminNotifyEmbed(member, 'joined'), req.regiment);
       res.json({ ok: true, tag: member.user.tag });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });

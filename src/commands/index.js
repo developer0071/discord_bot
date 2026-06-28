@@ -649,6 +649,87 @@ const transferBannerCommand = {
     });
   },
 };
+
+// ─── /transfersunticketowners ────────────────────────────────────────────────
+const transferSunBannerCommand = {
+  data: new SlashCommandBuilder()
+    .setName('transfersunticketowners')
+    .setDescription('Transfer join/leave banners for Sunshine to the new Sunshine TICKET-OWNERS channel')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  async execute(interaction) {
+    if (!canManage(interaction.member)) return deny(interaction);
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const sourceChannelId = process.env.TICKET_OWNERS_CHANNEL_ID || process.env.LOG_CHANNEL_ID;
+    const targetChannelId = process.env['TICKET-HOLDERS-SUNSHINE'];
+
+    if (!sourceChannelId || !targetChannelId) {
+      return interaction.editReply({ embeds: [errorEmbed('Source or target channel ID is missing in .env.')] });
+    }
+    if (sourceChannelId === targetChannelId) {
+      return interaction.editReply({ embeds: [errorEmbed('Source and target channels are the same.')] });
+    }
+
+    const sourceChannel = interaction.guild.channels.cache.get(sourceChannelId);
+    const targetChannel = interaction.guild.channels.cache.get(targetChannelId);
+
+    if (!sourceChannel || !targetChannel) {
+      return interaction.editReply({ embeds: [errorEmbed('Could not find the source or target channel in this server.')] });
+    }
+
+    await interaction.editReply({ embeds: [{ color: 0xf0a500, title: '⏳ Transferring Sunshine Banners...', description: 'Fetching and moving banners...' }] });
+
+    let transferred = 0;
+    let failed = 0;
+    let lastMessageId = null;
+    let keepGoing = true;
+
+    while (keepGoing) {
+      const options = { limit: 100 };
+      if (lastMessageId) options.before = lastMessageId;
+      
+      const messages = await sourceChannel.messages.fetch(options).catch(() => null);
+      if (!messages || messages.size === 0) break;
+
+      lastMessageId = messages.last().id;
+
+      for (const [, msg] of messages) {
+        if (msg.author.id !== interaction.client.user.id) continue;
+        if (msg.embeds.length === 0) continue;
+
+        const embed = msg.embeds[0];
+        const isBanner = embed.title === '👤 New Regiment Member' || embed.title === '👤 Member Left Regiment';
+        
+        if (isBanner) {
+          const userField = embed.fields?.find(f => f.name === 'User');
+          if (!userField) continue;
+          
+          const match = userField.value.match(/\((\d+)\)/);
+          if (!match) continue;
+          const userId = match[1];
+
+          // Check if user is currently in sunshine
+          const inSunshine = await isMember(userId, 'sunshine');
+          if (inSunshine) {
+            try {
+              await targetChannel.send({ embeds: [embed] });
+              await msg.delete();
+              transferred++;
+            } catch (e) {
+              failed++;
+            }
+          }
+        }
+      }
+    }
+
+    await interaction.editReply({ 
+      embeds: [successEmbed(`Transferred **${transferred}** Sunshine banner(s) to the new channel.\n${failed > 0 ? `Failed to transfer ${failed} banner(s).` : ''}`)] 
+    });
+  },
+};
 module.exports = [
   queueCommand,
   myPositionCommand,
@@ -666,4 +747,5 @@ module.exports = [
   psCommand,
   utcCommand,
   transferBannerCommand,
+  transferSunBannerCommand,
 ];
