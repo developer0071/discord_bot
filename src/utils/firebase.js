@@ -84,7 +84,7 @@ async function addToQueue(userId, username, regiment = 'moonlight') {
   // Prevent duplicates
   const existing = await db.collection('queue').doc(userId).get();
   if (existing.exists) {
-    const position = await getQueuePosition(userId);
+    const position = await getQueuePosition(userId, regiment);
     return { alreadyQueued: true, position };
   }
 
@@ -143,7 +143,7 @@ async function getFullQueue(regiment = 'moonlight') {
  */
 async function getNextInQueue(regiment = 'moonlight') {
   const db = getDb(regiment);
-  const queue = await getFullQueue();
+  const queue = await getFullQueue(regiment);
   if (queue.length === 0) return null;
   return queue[0];
 }
@@ -153,7 +153,7 @@ async function getNextInQueue(regiment = 'moonlight') {
  */
 async function getQueuePosition(userId, regiment = 'moonlight') {
   const db = getDb(regiment);
-  const queue = await getFullQueue();
+  const queue = await getFullQueue(regiment);
   const user = queue.find(u => u.userId === userId);
   return user ? user.position : null;
 }
