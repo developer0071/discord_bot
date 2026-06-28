@@ -25,24 +25,24 @@ module.exports = {
 
     try {
       const wasInQueue = await isInQueue(member.id);
-      const wasAMember = await isMember(member.id);
-
-      // ── If they were in queue, just remove their ticket ───────────────────
       if (wasInQueue) {
         await removeFromQueue(member.id);
-        console.log(`[QUEUE] ${member.user.tag} removed from queue (left server)`);
-        return;
+        console.log(`[QUEUE] ${member.user.tag} removed from global queue (left server)`);
       }
 
-      // ── If they were a regiment member, free their slot ───────────────────
-      if (wasAMember || hasRegimentRole(member)) {
-        await removeMember(member.id);
-        await notifyAdmins(member.guild, adminNotifyEmbed(member, 'left'));
-        console.log(`[LEAVE] ${member.user.tag} removed from regiment`);
+      const checkAndRemove = async (reg) => {
+        const wasInReg = await isMember(member.id, reg);
+        if (wasInReg || hasRegimentRole(member, reg)) {
+          await removeMember(member.id, reg);
+          await notifyAdmins(member.guild, adminNotifyEmbed(member, 'left'));
+          console.log(`[LEAVE] ${member.user.tag} removed from ${reg} regiment`);
+          await promoteFromQueue(member.guild, reg);
+        }
+      };
 
-        // Now check if anyone is waiting in the queue
-        await promoteFromQueue(member.guild);
-      }
+      await checkAndRemove('moonlight');
+      await checkAndRemove('sunshine');
+
     } catch (err) {
       console.error('[guildMemberRemove] Error:', err);
     }

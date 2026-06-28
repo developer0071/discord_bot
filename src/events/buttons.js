@@ -70,8 +70,11 @@ async function doJoin(interaction, member, regiment) {
 async function handleJoin(interaction, regiment) {
   const member = interaction.member;
 
-  if ((await isMember(member.id, regiment)) || hasRegimentRole(member, regiment)) {
-    return interaction.reply({ embeds: [errorEmbed("You're already in the regiment! 🎖️")], flags: MessageFlags.Ephemeral });
+  const inMoonlight = (await isMember(member.id, 'moonlight')) || hasRegimentRole(member, 'moonlight');
+  const inSunshine = (await isMember(member.id, 'sunshine')) || hasRegimentRole(member, 'sunshine');
+
+  if (inMoonlight || inSunshine) {
+    return interaction.reply({ embeds: [errorEmbed("You're already in a regiment! 🎖️")], flags: MessageFlags.Ephemeral });
   }
   if (await isInQueue(member.id, regiment)) {
     const position = await getQueuePosition(member.id, regiment);

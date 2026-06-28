@@ -80,7 +80,7 @@ async function setMaxSlots(newMax, regiment = 'moonlight') {
  * Returns their position (1-based).
  */
 async function addToQueue(userId, username, regiment = 'moonlight') {
-  const db = getDb(regiment);
+  const db = getDb('moonlight'); // global queue
   // Prevent duplicates
   const existing = await db.collection('queue').doc(userId).get();
   if (existing.exists) {
@@ -108,7 +108,7 @@ async function addToQueue(userId, username, regiment = 'moonlight') {
  * Remove a user from the queue (they left or got promoted).
  */
 async function removeFromQueue(userId, regiment = 'moonlight') {
-  const db = getDb(regiment);
+  const db = getDb('moonlight'); // global queue
   await db.collection('queue').doc(userId).delete();
 }
 
@@ -116,7 +116,7 @@ async function removeFromQueue(userId, regiment = 'moonlight') {
  * Get full queue list ordered by votes (desc), then join time (asc).
  */
 async function getFullQueue(regiment = 'moonlight') {
-  const db = getDb(regiment);
+  const db = getDb('moonlight'); // global queue
   const snapshot = await db.collection('queue').get();
   const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
@@ -142,7 +142,7 @@ async function getFullQueue(regiment = 'moonlight') {
  * Returns the document data or null.
  */
 async function getNextInQueue(regiment = 'moonlight') {
-  const db = getDb(regiment);
+  const db = getDb('moonlight'); // global queue
   const queue = await getFullQueue(regiment);
   if (queue.length === 0) return null;
   return queue[0];
@@ -152,7 +152,7 @@ async function getNextInQueue(regiment = 'moonlight') {
  * Get a user's current position in the queue (1-based).
  */
 async function getQueuePosition(userId, regiment = 'moonlight') {
-  const db = getDb(regiment);
+  const db = getDb('moonlight'); // global queue
   const queue = await getFullQueue(regiment);
   const user = queue.find(u => u.userId === userId);
   return user ? user.position : null;
@@ -162,7 +162,7 @@ async function getQueuePosition(userId, regiment = 'moonlight') {
  * Check if a user is currently in the queue.
  */
 async function isInQueue(userId, regiment = 'moonlight') {
-  const db = getDb(regiment);
+  const db = getDb('moonlight'); // global queue
   const doc = await db.collection('queue').doc(userId).get();
   return doc.exists;
 }
@@ -172,7 +172,7 @@ async function isInQueue(userId, regiment = 'moonlight') {
  * Limit: 1 vote per voter per 24 hours.
  */
 async function castQueueVote(voterId, targetUserId, regiment = 'moonlight') {
-  const db = getDb(regiment);
+  const db = getDb('moonlight'); // global queue
   const voteDoc = await db.collection('queue_votes').doc(voterId).get();
   const now = Date.now();
   
