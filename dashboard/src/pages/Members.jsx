@@ -283,7 +283,9 @@ export default function Members() {
                   )}
                   <td>
                     <div className="user-cell">
-                      <div className="user-avatar" style={{ background: getAvatarColor(m.discord) }}>{getInitials(m.discord)}</div>
+                      <div className="user-avatar" style={{ background: m.avatar ? undefined : getAvatarColor(m.discord), padding: m.avatar ? 0 : undefined, overflow: 'hidden' }}>
+                        {m.avatar ? <img src={m.avatar} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : getInitials(m.discord)}
+                      </div>
                       <div>
                         <div className="user-name">{m.discord}</div>
                         <div className="user-tag">@{m.discord.toLowerCase()}</div>
@@ -371,7 +373,9 @@ export default function Members() {
         {viewingMember && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
-              <div className="user-avatar" style={{ width: 56, height: 56, fontSize: 20, borderRadius: 12, background: getAvatarColor(viewingMember.discord) }}>{getInitials(viewingMember.discord)}</div>
+              <div className="user-avatar" style={{ width: 56, height: 56, fontSize: 20, borderRadius: 12, background: viewingMember.avatar ? undefined : getAvatarColor(viewingMember.discord), padding: viewingMember.avatar ? 0 : undefined, overflow: 'hidden' }}>
+                {viewingMember.avatar ? <img src={viewingMember.avatar} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : getInitials(viewingMember.discord)}
+              </div>
               <div>
                 <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Chakra Petch', sans-serif" }}>{viewingMember.discord}</div>
                 <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>@{viewingMember.discord.toLowerCase()}</div>
@@ -403,7 +407,9 @@ export default function Members() {
         <div className="confirm-text">Are you sure you want to kick this member from the regiment?</div>
         {kickTarget && (
           <div className="confirm-user">
-            <div className="user-avatar" style={{ background: getAvatarColor(kickTarget.discord), width: 40, height: 40, fontSize: 14 }}>{getInitials(kickTarget.discord)}</div>
+            <div className="user-avatar" style={{ width: 40, height: 40, fontSize: 14, background: kickTarget.avatar ? undefined : getAvatarColor(kickTarget.discord), padding: kickTarget.avatar ? 0 : undefined, overflow: 'hidden' }}>
+              {kickTarget.avatar ? <img src={kickTarget.avatar} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : getInitials(kickTarget.discord)}
+            </div>
             <div>
               <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{kickTarget.discord}</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{kickTarget.roblox}</div>

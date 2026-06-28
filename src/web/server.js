@@ -377,14 +377,24 @@ load();
         isReadOnly ? Promise.resolve([]) : fb.getLogs(50, req.regiment),
         isReadOnly ? Promise.resolve({}) : fb.getDashboardSettings(req.regiment),
       ]);
+      const getAvatar = (id) => {
+        const m = guild().members.cache.get(id);
+        return m ? m.user.displayAvatarURL({ extension: 'png', size: 64 }) : null;
+      };
+
       const profile = Object.fromEntries(users.map((u) => [u.discordId || u.userId, u]));
       const result = {
         status,
         settings: isReadOnly ? {} : settings,
+        me: {
+          tag: req.user.member?.user.tag || req.user.tag || 'User',
+          avatar: req.user.member ? req.user.member.user.displayAvatarURL({ extension: 'png', size: 64 }) : null
+        },
         members: members.map((m) => {
           return {
             userId: m.userId,
             discord: m.username,
+            avatar: getAvatar(m.userId),
             roblox: profile[m.userId]?.robloxUsername || '',
             families: profile[m.userId]?.families || [],
             status: profile[m.userId]?.status || 'active',
@@ -394,6 +404,7 @@ load();
         queue: queue.map((q) => ({
           userId: q.userId,
           discord: q.username,
+          avatar: getAvatar(q.userId),
           position: q.position,
           roblox: profile[q.userId]?.robloxUsername || '',
           families: profile[q.userId]?.families || [],

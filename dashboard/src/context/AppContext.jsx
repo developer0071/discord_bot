@@ -18,6 +18,7 @@ export function AppProvider({ children }) {
   const isMod = userTier === 'mod';
 
   // ── Data ──
+  const [me, setMe] = useState(null);
   const [members, setMembers] = useState([]);
   const [leveling, setLeveling] = useState([]);
   const [queue, setQueue] = useState([]);
@@ -74,6 +75,7 @@ export function AppProvider({ children }) {
     try {
       const data = await fetchDashboardData();
       if (data.tier) setUserTier(data.tier === 'readonly' ? 'readonly' : 'mod');
+      if (data.me) setMe(data.me);
       setMembers(data.members);
       setLeveling(data.leveling || []);
       setQueue(data.queue);
@@ -279,7 +281,7 @@ export function AppProvider({ children }) {
     // Auth
     authenticated, authError, login, logout, loading, userTier, isMod,
     // Data
-    members, leveling, queue, logs, feedback, giveaways, channels, settings, regimentStatus,
+    me, members, leveling, queue, logs, feedback, giveaways, channels, settings, regimentStatus,
     // Data loading
     loadData, loadGiveaways, loadChannels,
     // Tab & Search

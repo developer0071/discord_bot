@@ -16,7 +16,7 @@ const NAV_ITEMS = [
 const READONLY_TABS = new Set(['members', 'queue', 'chat', 'leveling']);
 
 export default function Sidebar({ isOpen, onClose }) {
-  const { members, queue, giveaways, isMod } = useApp();
+  const { members, queue, giveaways, isMod, me } = useApp();
   const regiment = getRegiment();
 
   const badgeValues = {
@@ -79,9 +79,15 @@ export default function Sidebar({ isOpen, onClose }) {
 
       <div className="sidebar-footer">
         <div className="sidebar-user">
-          <div className="sidebar-avatar">MS</div>
+          <div className="sidebar-avatar" style={{ padding: me?.avatar ? 0 : undefined, overflow: 'hidden' }}>
+            {me?.avatar ? (
+              <img src={me.avatar} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              (me?.tag?.[0] || 'M').toUpperCase()
+            )}
+          </div>
           <div className="sidebar-user-info">
-            <p>Moonlight Soldier</p>
+            <p>{me?.tag || 'User'}</p>
             <span>{isMod ? 'Moderator' : 'Viewer'}</span>
           </div>
         </div>

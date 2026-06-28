@@ -29,7 +29,9 @@ export default function Queue() {
         ) : queue.map(q => (
           <div className="queue-card" key={q.id}>
             <div className="queue-card-header">
-              <div className="user-avatar" style={{ background: getAvatarColor(q.discord) }}>{getInitials(q.discord)}</div>
+              <div className="user-avatar" style={{ background: q.avatar ? undefined : getAvatarColor(q.discord), padding: q.avatar ? 0 : undefined, overflow: 'hidden' }}>
+                {q.avatar ? <img src={q.avatar} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : getInitials(q.discord)}
+              </div>
               <div>
                 <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 15 }}>{q.discord}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{q.roblox}</div>
