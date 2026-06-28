@@ -825,7 +825,7 @@ load();
         await fb.setMaxSlots(max, req.regiment);
         const status = await fb.getRegimentStatus(req.regiment);
         const toFill = Math.min(max - status.currentCount, 50); // cap at 50 promotions per call
-        for (let i = 0; i < toFill; i++) await promoteFromQueue(guild(, req.regiment));
+        for (let i = 0; i < toFill; i++) await promoteFromQueue(guild(), req.regiment);
       }
       await fb.saveDashboardSettings({
         name: name || '',
