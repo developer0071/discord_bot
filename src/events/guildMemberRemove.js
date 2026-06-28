@@ -58,9 +58,9 @@ module.exports = {
  */
 const MAX_STALE_RETRIES = 50;
 
-async function promoteFromQueue(guild) {
+async function promoteFromQueue(guild, regiment = 'moonlight') {
   for (let attempt = 0; attempt < MAX_STALE_RETRIES; attempt++) {
-    const next = await getNextInQueue();
+    const next = await getNextInQueue(regiment);
     if (!next) {
       console.log('[QUEUE] No one in queue to promote');
       return;
@@ -73,16 +73,16 @@ async function promoteFromQueue(guild) {
     } catch {
       // User is no longer in the server — remove stale queue entry and try next
       console.log(`[QUEUE] ${next.username} no longer in server, removing stale entry (attempt ${attempt + 1})`);
-      await removeFromQueue(next.userId);
+      await removeFromQueue(next.userId, regiment);
       continue; // try next person in queue (no recursion)
     }
 
     // Assign role and record in DB
-    await assignRegimentRole(nextMember);
-    await removeFromQueue(next.userId);
-    await addMember(next.userId, nextMember.user.tag);
+    await assignRegimentRole(nextMember, regiment);
+    await removeFromQueue(next.userId, regiment);
+    await addMember(next.userId, nextMember.user.tag, regiment);
 
-    const status = await getRegimentStatus();
+    const status = await getRegimentStatus(regiment);
     console.log(`[PROMOTE] ${nextMember.user.tag} promoted from queue (${status.currentCount}/${status.maxSlots})`);
 
     // Notify the promoted user

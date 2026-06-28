@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { getRegiment, setRegiment } from '../utils/api';
 
 const NAV_ITEMS = [
   { key: 'members',   path: '/members',   icon: 'fa-users',             label: 'Members',       section: 'Management', badgeKey: 'memberCount' },
@@ -14,8 +15,9 @@ const NAV_ITEMS = [
 
 const READONLY_TABS = new Set(['members', 'queue', 'chat', 'leveling']);
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }) {
   const { members, queue, giveaways, isMod } = useApp();
+  const regiment = getRegiment();
 
   const badgeValues = {
     memberCount: members.filter(m => m.status !== 'kicked').length,
@@ -26,15 +28,25 @@ export default function Sidebar() {
   let lastSection = '';
 
   return (
-    <aside className="sidebar" id="sidebar">
-      <div className="sidebar-brand">
-        <div className="brand-icon">
-          <img src="/logo.png" alt="Moonlight Soldiers" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+    <aside className={`sidebar ${isOpen ? 'open' : ''}`} id="sidebar">
+      <div className="sidebar-brand" style={{ flexDirection: 'column', alignItems: 'stretch', padding: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+          <div className="brand-icon" style={{ flexShrink: 0 }}>
+            <img src="/logo.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          </div>
+          <div className="brand-text" style={{ minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+            <h2 style={{ fontSize: '15px', margin: 0, textOverflow: 'ellipsis', overflow: 'hidden' }}>{regiment === 'sunshine' ? 'Sunshine' : 'Moonlight'} Soldiers</h2>
+            <span style={{ fontSize: '12px' }}>Command Center</span>
+          </div>
         </div>
-        <div className="brand-text">
-          <h2>Moonlight Soldiers</h2>
-          <span>Command Center</span>
-        </div>
+        <select 
+          value={regiment} 
+          onChange={(e) => setRegiment(e.target.value)}
+          style={{ width: '100%', padding: '6px 10px', background: '#202225', color: '#fff', border: '1px solid #2f3136', borderRadius: '4px', outline: 'none', cursor: 'pointer', fontSize: '13px' }}
+        >
+          <option value="moonlight">Moonlight Regiment</option>
+          <option value="sunshine">Sunshine Regiment</option>
+        </select>
       </div>
 
       <nav className="sidebar-nav">
@@ -54,6 +66,7 @@ export default function Sidebar() {
               <NavLink
                 to={item.path}
                 className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+                onClick={onClose}
               >
                 <i className={`fas ${item.icon}`} />
                 {item.label}

@@ -11,6 +11,15 @@ export function setBackend(url) {
   location.reload();
 }
 
+export function getRegiment() {
+  return localStorage.getItem('dash_regiment') || 'moonlight';
+}
+
+export function setRegiment(r) {
+  localStorage.setItem('dash_regiment', r);
+  location.reload();
+}
+
 export function getToken() {
   return localStorage.getItem('dash_token') || '';
 }
@@ -46,6 +55,7 @@ export async function apiFetch(method, path, body) {
   const isFormData = body instanceof FormData;
   const headers = {
     ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}),
+    'x-regiment': getRegiment(),
   };
   if (!isFormData) {
     headers['Content-Type'] = 'application/json';

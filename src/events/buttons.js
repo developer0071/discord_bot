@@ -43,12 +43,12 @@ const {
 } = require('../utils/helpers');
 
 // ─── Core join (assumes the interaction is already deferred) ──────────────────
-async function doJoin(interaction, member) {
-  const status = await getRegimentStatus();
+async function doJoin(interaction, member, regiment) {
+  const status = await getRegimentStatus(regiment);
 
   if (status.openSlots > 0) {
     try {
-      await assignRegimentRole(member);
+      await assignRegimentRole(member, regiment);
     } catch (err) {
       console.error('[join] role assign failed:', err.message);
       return interaction.editReply({
@@ -56,25 +56,25 @@ async function doJoin(interaction, member) {
         components: [],
       });
     }
-    await addMember(member.id, member.user.tag);
+    await addMember(member.id, member.user.tag, regiment);
     await notifyAdmins(interaction.guild, adminNotifyEmbed(member, 'joined'));
     return interaction.editReply({ embeds: [welcomeEmbed(member)], components: [] });
   }
 
-  const { position } = await addToQueue(member.id, member.user.tag);
-  await assignRecruitRole(member).catch((err) => console.error('[join] recruit role:', err.message));
+  const { position } = await addToQueue(member.id, member.user.tag, regiment);
+  await assignRecruitRole(member, regiment).catch((err) => console.error('[join] recruit role:', err.message));
   return interaction.editReply({ embeds: [welcomeEmbed(member, position)], components: [] });
 }
 
 // ─── Join Regiment button ─────────────────────────────────────────────────────
-async function handleJoin(interaction) {
+async function handleJoin(interaction, regiment) {
   const member = interaction.member;
 
-  if ((await isMember(member.id)) || hasRegimentRole(member)) {
+  if ((await isMember(member.id, regiment)) || hasRegimentRole(member, regiment)) {
     return interaction.reply({ embeds: [errorEmbed("You're already in the regiment! 🎖️")], flags: MessageFlags.Ephemeral });
   }
-  if (await isInQueue(member.id)) {
-    const position = await getQueuePosition(member.id);
+  if (await isInQueue(member.id, regiment)) {
+    const position = await getQueuePosition(member.id, regiment);
     return interaction.reply({ embeds: [errorEmbed(`You're already in the queue at position **#${position}**.`)], flags: MessageFlags.Ephemeral });
   }
 
@@ -83,16 +83,16 @@ async function handleJoin(interaction) {
   // the system existed), pop up the form to collect it first.
   const profile = await getUserProfile(member.id);
   if (!profile || !profile.robloxUsername) {
-    return showJoinModal(interaction); // showModal must be the first response (no defer)
+    return showJoinModal(interaction, regiment); // showModal must be the first response (no defer)
   }
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  await doJoin(interaction, member);
+  await doJoin(interaction, member, regiment);
 }
 
 // ─── Join: collect Roblox username (modal) → family picker → join ─────────────
-async function showJoinModal(interaction) {
-  const modal = new ModalBuilder().setCustomId('join_modal').setTitle('Join the Regiment');
+async function showJoinModal(interaction, regiment) {
+  const modal = new ModalBuilder().setCustomId(`join_modal_${regiment}`).setTitle('Join the Regiment');
   const roblox = new TextInputBuilder()
     .setCustomId('roblox_username')
     .setLabel('What is your Roblox username?')
@@ -105,6 +105,7 @@ async function showJoinModal(interaction) {
 }
 
 async function handleJoinModal(interaction) {
+  const regiment = interaction.customId.replace("join_modal_", "");
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const roblox = interaction.fields.getTextInputValue('roblox_username').trim();
 
@@ -116,7 +117,7 @@ async function handleJoinModal(interaction) {
   });
 
   const select = new StringSelectMenuBuilder()
-    .setCustomId('join_families')
+    .setCustomId(`join_families_${regiment}`)
     .setPlaceholder('Pick the families you use')
     .setMinValues(1)
     .setMaxValues(families.options.length)
@@ -129,6 +130,7 @@ async function handleJoinModal(interaction) {
 }
 
 async function handleJoinFamilies(interaction) {
+  const regiment = interaction.customId.replace("join_families_", "");
   await interaction.deferUpdate();
 
   const chosen = interaction.values;
@@ -143,33 +145,33 @@ async function handleJoinFamilies(interaction) {
   await saveUserProfile(interaction.user.id, { families: chosen });
 
   // Info collected — now actually join the regiment.
-  await doJoin(interaction, interaction.member);
+  await doJoin(interaction, interaction.member, regiment);
 }
 
 // ─── View Queue ─────────────────────────────────────────────────────────────
-async function handleViewQueue(interaction) {
-  const [queue, status] = await Promise.all([getFullQueue(), getRegimentStatus()]);
+async function handleViewQueue(interaction, regiment) {
+  const [queue, status] = await Promise.all([getFullQueue(regiment), getRegimentStatus(regiment)]);
   return interaction.editReply({ embeds: [queueStatusEmbed(queue, status)] });
 }
 
 // ─── My Position ────────────────────────────────────────────────────────────
-async function handleMyPosition(interaction) {
-  const position = await getQueuePosition(interaction.user.id);
+async function handleMyPosition(interaction, regiment) {
+  const position = await getQueuePosition(interaction.user.id, regiment);
   if (position === null) {
     return interaction.editReply({ embeds: [errorEmbed("You're not currently in the queue.")] });
   }
-  const status = await getRegimentStatus();
+  const status = await getRegimentStatus(regiment);
   return interaction.editReply({
     embeds: [successEmbed(`You're at position **#${position}** in the queue. Slots: ${status.currentCount}/${status.maxSlots}.`)],
   });
 }
 
 // ─── Leave Queue ────────────────────────────────────────────────────────────
-async function handleLeaveQueue(interaction) {
-  if (!(await isInQueue(interaction.user.id))) {
+async function handleLeaveQueue(interaction, regiment) {
+  if (!(await isInQueue(interaction.user.id, regiment))) {
     return interaction.editReply({ embeds: [errorEmbed("You're not in the queue.")] });
   }
-  await removeFromQueue(interaction.user.id);
+  await removeFromQueue(interaction.user.id, regiment);
   return interaction.editReply({ embeds: [successEmbed('You have been removed from the queue.')] });
 }
 
@@ -267,15 +269,24 @@ async function handleButton(interaction) {
   }
 
   // ── Join Regiment → may open a modal or defer+join; manages its own response ──
-  if (interaction.customId === 'regiment_join') {
-    return handleJoin(interaction);
+  if (interaction.customId.startsWith('regiment_join_')) {
+    const r = interaction.customId.replace('regiment_join_', '');
+    return handleJoin(interaction, r);
   }
 
   // ── Other regiment buttons (need Firestore work → defer first) ──
-  const handler = handlers[interaction.customId];
+  let handler;
+  let regimentMatch;
+  for (const key of Object.keys(handlers)) {
+    if (interaction.customId.startsWith(key + '_')) {
+      handler = handlers[key];
+      regimentMatch = interaction.customId.replace(key + '_', '');
+      break;
+    }
+  }
   if (handler) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    return handler(interaction);
+    return handler(interaction, regimentMatch);
   }
 
   // ── Verify button → opens the verification modal (must not defer first) ──

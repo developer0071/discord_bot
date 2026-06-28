@@ -89,6 +89,10 @@ function startWebServer(client) {
 
   // Apply concurrency guard and read rate-limit to all /api routes
   app.use('/api', concurrencyGuard);
+  app.use('/api', (req, res, next) => {
+    req.regiment = req.headers['x-regiment'] || 'moonlight';
+    next();
+  });
 
   const rootDir = path.join(__dirname, '..', '..');
   const guild = () => client.guilds.cache.first();
@@ -158,7 +162,7 @@ function startWebServer(client) {
   // ── Public giveaway info (no auth) ──
   app.get('/api/giveaways/:id/public', async (req, res) => {
     try {
-      const g = await fb.getGiveaway(req.params.id);
+      const g = await fb.getGiveaway(req.params.id, req.regiment);
       if (!g) return res.status(404).json({ error: 'Giveaway not found' });
       res.json({
         id: g.id,
@@ -288,8 +292,9 @@ load();
   }
 
   // ── Data (with server-side cache to reduce Firestore reads) ──
-  let dataCache = null;
-  let dataCacheTime = 0;
+  let dataCache = { moonlight: null, sunshine: null };
+  let dataCacheTime = { moonlight: 0, sunshine: 0 };
+  
   const DATA_CACHE_TTL = 60_000; // 60 seconds
 
   async function refreshUserTier(req, res) {
@@ -364,15 +369,15 @@ load();
       const now = Date.now();
       const canGv = canManageGiveaways(req.user.member);
 
-      if (!isReadOnly && dataCache && (now - dataCacheTime) < DATA_CACHE_TTL) {
-        return res.json({ ...dataCache, tier: 'mod', canManageGiveaways: canGv });
+      if (!isReadOnly && dataCache[req.regiment] && (now - dataCacheTime[req.regiment]) < DATA_CACHE_TTL) {
+        return res.json({ ...dataCache[req.regiment], tier: 'mod', canManageGiveaways: canGv });
       }
 
       const [status, members, queue, users, logs, settings] = await Promise.all([
-        fb.getRegimentStatus(), fb.getAllMembers(), fb.getFullQueue(),
+        fb.getRegimentStatus(req.regiment), fb.getAllMembers(req.regiment), fb.getFullQueue(req.regiment),
         isReadOnly ? Promise.resolve([]) : fb.getAllUsers(),
-        isReadOnly ? Promise.resolve([]) : fb.getLogs(50),
-        isReadOnly ? Promise.resolve({}) : fb.getDashboardSettings(),
+        isReadOnly ? Promise.resolve([]) : fb.getLogs(50, req.regiment),
+        isReadOnly ? Promise.resolve({}) : fb.getDashboardSettings(req.regiment),
       ]);
       const profile = Object.fromEntries(users.map((u) => [u.discordId || u.userId, u]));
       const result = {
@@ -405,8 +410,8 @@ load();
       };
 
       if (!isReadOnly) {
-        dataCache = result;
-        dataCacheTime = now;
+        dataCache[req.regiment] = result;
+        dataCacheTime[req.regiment] = now;
       }
       result.canManageGiveaways = canGv;
       res.json(result);
@@ -421,9 +426,9 @@ load();
       const { userId } = req.body;
       const member = await fetchMember(userId);
       if (!member) return res.status(404).json({ error: 'User is no longer in the server' });
-      await assignRegimentRole(member);
-      await fb.removeFromQueue(userId);
-      await fb.addMember(userId, member.user.tag);
+      await assignRegimentRole(member, req.regiment);
+      await fb.removeFromQueue(userId, req.regiment);
+      await fb.addMember(userId, member.user.tag, req.regiment);
       log('QUEUE_ACCEPTED', member.user.tag, 'Accepted from queue');
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
@@ -433,7 +438,7 @@ load();
   app.post('/api/reject', requireModSide, rlWrite, async (req, res) => {
     try {
       const member = await fetchMember(req.body.userId);
-      await fb.removeFromQueue(req.body.userId);
+      await fb.removeFromQueue(req.body.userId, req.regiment);
       log('QUEUE_REJECTED', member?.user.tag || req.body.userId, 'Removed from queue');
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
@@ -444,8 +449,8 @@ load();
     try {
       const { userId } = req.body;
       const member = await fetchMember(userId);
-      if (member) await removeRegimentRole(member).catch(() => {});
-      await fb.removeMember(userId);
+      if (member) await removeRegimentRole(member, req.regiment).catch(() => {});
+      await fb.removeMember(userId, req.regiment);
       log('MEMBER_KICKED', member?.user.tag || userId, 'Removed from regiment');
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
@@ -466,9 +471,9 @@ load();
       }
       if (!member) return res.status(404).json({ error: 'Could not find that user in the server' });
 
-      await assignRegimentRole(member);
-      if (await fb.isInQueue(member.id)) await fb.removeFromQueue(member.id);
-      if (!(await fb.isMember(member.id))) await fb.addMember(member.id, member.user.tag);
+      await assignRegimentRole(member, req.regiment);
+      if (await fb.isInQueue(member.id, req.regiment)) await fb.removeFromQueue(member.id, req.regiment);
+      if (!(await fb.isMember(member.id, req.regiment))) await fb.addMember(member.id, member.user.tag, req.regiment);
       if (roblox) await fb.saveUserProfile(member.id, { discordId: member.id, discordTag: member.user.tag, robloxUsername: roblox });
       log('MEMBER_ADDED', member.user.tag, 'Added to regiment');
       res.json({ ok: true, tag: member.user.tag });
@@ -508,16 +513,17 @@ load();
       if (!g) return res.status(500).json({ error: 'Guild not found' });
       await g.members.fetch(); // Load all members into cache
 
-      const roleId = process.env.REGIMENT_ROLE_ID;
+      const roleId = req.regiment === 'sunshine' ? process.env.SUNSHINE_ROLE_ID : process.env.REGIMENT_ROLE_ID;
+      if (!roleId) return res.status(500).json({ error: 'Role ID not configured for this regiment' });
       const validDiscordMembers = g.members.cache.filter(m => m.roles.cache.has(roleId));
 
-      const dbMembers = await fb.getAllMembers();
+      const dbMembers = await fb.getAllMembers(req.regiment);
       let added = 0, removed = 0;
 
       // Remove DB members not in Discord (or missing the role)
       for (const dbM of dbMembers) {
         if (!validDiscordMembers.has(dbM.userId)) {
-          await fb.removeMember(dbM.userId);
+          await fb.removeMember(dbM.userId, req.regiment);
           removed++;
         }
       }
@@ -525,12 +531,12 @@ load();
       // Add missing Discord members to DB
       for (const [id, member] of validDiscordMembers) {
         if (!dbMembers.find(m => m.userId === id)) {
-          await fb.addMember(id, member.user.tag);
+          await fb.addMember(id, member.user.tag, req.regiment);
           added++;
         }
       }
 
-      const newCount = await fb.syncRegimentCount();
+      const newCount = await fb.syncRegimentCount(req.regiment);
       log('MEMBERS_SYNCED', req.user.tag, `Synced members: added ${added}, removed ${removed}, total ${newCount}`);
       res.json({ ok: true, added, removed, total: newCount });
     } catch (e) {
@@ -542,7 +548,7 @@ load();
   // ── Promote the next person in the queue ──
   app.post('/api/promote', requireModSide, rlWrite, async (req, res) => {
     try {
-      await promoteFromQueue(guild());
+      await promoteFromQueue(guild(, req.regiment));
       log('QUEUE_ACCEPTED', 'Next in queue', 'Promoted next from queue');
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
@@ -553,11 +559,11 @@ load();
     try {
       const newMax = parseInt(req.body.slots, 10);
       if (!Number.isInteger(newMax) || newMax < 0 || newMax > 500) return res.status(400).json({ error: 'invalid slots (0-500)' });
-      await fb.getRegimentStatus(); // ensure config doc exists
-      await fb.setMaxSlots(newMax);
-      const status = await fb.getRegimentStatus();
+      await fb.getRegimentStatus(req.regiment); // ensure config doc exists
+      await fb.setMaxSlots(newMax, req.regiment);
+      const status = await fb.getRegimentStatus(req.regiment);
       const toFill = Math.min(newMax - status.currentCount, 50); // cap at 50 promotions per call
-      for (let i = 0; i < toFill; i++) await promoteFromQueue(guild());
+      for (let i = 0; i < toFill; i++) await promoteFromQueue(guild(, req.regiment));
       log('SETTINGS_CHANGED', 'System', `Max slots set to ${newMax}`);
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
@@ -622,7 +628,7 @@ load();
 
   app.get('/api/giveaways', requireGiveawayMod, rlRead, async (req, res) => {
     try {
-      const list = await fb.getAllGiveaways();
+      const list = await fb.getAllGiveaways(req.regiment);
       res.json({
         giveaways: list.map((g) => ({
           id: g.id,
@@ -646,14 +652,14 @@ load();
 
   app.get('/api/giveaways/:id/me', rlRead, async (req, res) => {
     try {
-      const entered = await fb.isGiveawayEntrant(req.params.id, req.user.id);
+      const entered = await fb.isGiveawayEntrant(req.params.id, req.user.id, req.regiment);
       res.json({ entered });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
   app.get('/api/giveaways/:id', requireGiveawayMod, rlRead, async (req, res) => {
     try {
-      const g = await fb.getGiveaway(req.params.id);
+      const g = await fb.getGiveaway(req.params.id, req.regiment);
       if (!g) return res.status(404).json({ error: 'Giveaway not found' });
       res.json({
         ...g,
@@ -672,7 +678,7 @@ load();
       const member = await fetchMember(req.user.id);
       if (!member) return res.status(403).json({ error: 'You must be in the server to enter' });
 
-      const g = await fb.getGiveaway(req.params.id);
+      const g = await fb.getGiveaway(req.params.id, req.regiment);
       if (!g || g.status !== 'active') return res.status(400).json({ error: 'Giveaway is not active' });
 
       const endMs = giveawayUtil.endsAtMs(g);
@@ -683,12 +689,12 @@ load();
         return res.status(403).json({ error: "You don't have the required role" });
       }
 
-      if (await fb.isGiveawayEntrant(req.params.id, req.user.id)) {
+      if (await fb.isGiveawayEntrant(req.params.id, req.user.id, req.regiment)) {
         return res.status(400).json({ error: 'Already entered' });
       }
 
-      await fb.addGiveawayEntrant(req.params.id, req.user.id, member.user.tag);
-      const updated = await fb.getGiveaway(req.params.id);
+      await fb.addGiveawayEntrant(req.params.id, req.user.id, member.user.tag, req.regiment);
+      const updated = await fb.getGiveaway(req.params.id, req.regiment);
       await giveawayUtil.refreshMessage(client, updated);
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
@@ -696,13 +702,13 @@ load();
 
   app.post('/api/giveaways/:id/leave', rlWrite, async (req, res) => {
     try {
-      const g = await fb.getGiveaway(req.params.id);
+      const g = await fb.getGiveaway(req.params.id, req.regiment);
       if (!g || g.status !== 'active') return res.status(400).json({ error: 'Giveaway is not active' });
-      if (!(await fb.isGiveawayEntrant(req.params.id, req.user.id))) {
+      if (!(await fb.isGiveawayEntrant(req.params.id, req.user.id, req.regiment))) {
         return res.status(400).json({ error: 'Not entered' });
       }
-      await fb.removeGiveawayEntrant(req.params.id, req.user.id);
-      const updated = await fb.getGiveaway(req.params.id);
+      await fb.removeGiveawayEntrant(req.params.id, req.user.id, req.regiment);
+      const updated = await fb.getGiveaway(req.params.id, req.regiment);
       await giveawayUtil.refreshMessage(client, updated);
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
@@ -737,7 +743,7 @@ load();
         requiredRoleIds: Array.isArray(requiredRoleIds) ? requiredRoleIds : [],
       };
 
-      await fb.createGiveaway(id, data);
+      await fb.createGiveaway(id, data, req.regiment);
       // Always post to Discord immediately so users can see and enter
       await giveawayUtil.postGiveaway(client, { id, ...data });
 
@@ -760,7 +766,7 @@ load();
 
   app.post('/api/giveaways/:id/reroll', requireGiveawayMod, async (req, res) => {
     try {
-      const g = await fb.getGiveaway(req.params.id);
+      const g = await fb.getGiveaway(req.params.id, req.regiment);
       if (!g || g.status !== 'ended') return res.status(400).json({ error: 'Giveaway must be ended to reroll' });
 
       const entrantIds = Object.keys(g.entrants || {});
@@ -770,8 +776,8 @@ load();
         tag: g.entrants[userId]?.tag || userId,
       }));
 
-      await fb.updateGiveaway(req.params.id, { winners });
-      const updated = await fb.getGiveaway(req.params.id);
+      await fb.updateGiveaway(req.params.id, { winners }, req.regiment);
+      const updated = await fb.getGiveaway(req.params.id, req.regiment);
       await giveawayUtil.refreshMessage(client, updated);
 
       if (winners.length && g.channelId) {
@@ -791,7 +797,7 @@ load();
 
   app.delete('/api/giveaways/:id', requireGiveawayMod, async (req, res) => {
     try {
-      const g = await fb.getGiveaway(req.params.id);
+      const g = await fb.getGiveaway(req.params.id, req.regiment);
       if (!g) return res.status(404).json({ error: 'Giveaway not found' });
 
       if (g.messageId && g.channelId) {
@@ -802,7 +808,7 @@ load();
         } catch { /* message may already be gone */ }
       }
 
-      await fb.updateGiveaway(req.params.id, { status: 'cancelled' });
+      await fb.updateGiveaway(req.params.id, { status: 'cancelled' }, req.regiment);
       await fb.deleteGiveaway(req.params.id);
       log('GIVEAWAY_DELETED', req.user.tag, `Deleted ${req.params.id}`);
       res.json({ ok: true });
@@ -815,11 +821,11 @@ load();
       const { name, maxSize, autoAccept, kickReason } = req.body;
       const max = parseInt(maxSize, 10);
       if (Number.isInteger(max) && max >= 0 && max <= 500) {
-        await fb.getRegimentStatus();
-        await fb.setMaxSlots(max);
-        const status = await fb.getRegimentStatus();
+        await fb.getRegimentStatus(req.regiment);
+        await fb.setMaxSlots(max, req.regiment);
+        const status = await fb.getRegimentStatus(req.regiment);
         const toFill = Math.min(max - status.currentCount, 50); // cap at 50 promotions per call
-        for (let i = 0; i < toFill; i++) await promoteFromQueue(guild());
+        for (let i = 0; i < toFill; i++) await promoteFromQueue(guild(, req.regiment));
       }
       await fb.saveDashboardSettings({
         name: name || '',

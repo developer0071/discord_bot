@@ -115,24 +115,31 @@ async function swapRoles(member, addId, removeId) {
 }
 
 // Join / promote into the regiment: give Cadet, take Recruit.
-async function assignRegimentRole(member) {
-  if (!process.env.REGIMENT_ROLE_ID) throw new Error('REGIMENT_ROLE_ID not set in .env');
-  await swapRoles(member, process.env.REGIMENT_ROLE_ID, process.env.RECRUIT_ROLE_ID);
+async function assignRegimentRole(member, regiment = 'moonlight') {
+  const roleId = regiment === 'sunshine' ? process.env.SUNSHINE_ROLE_ID : process.env.REGIMENT_ROLE_ID;
+  const recruitId = regiment === 'sunshine' ? (process.env.SUNSHINE_RECRUIT_ROLE_ID || process.env.RECRUIT_ROLE_ID) : process.env.RECRUIT_ROLE_ID;
+  if (!roleId) throw new Error(`${regiment.toUpperCase()} role ID not set in .env`);
+  await swapRoles(member, roleId, recruitId);
 }
 
 // Waiting in queue: give Recruit, take Cadet.
-async function assignRecruitRole(member) {
-  if (!process.env.RECRUIT_ROLE_ID) return; // Recruit role is optional
-  await swapRoles(member, process.env.RECRUIT_ROLE_ID, process.env.REGIMENT_ROLE_ID);
+async function assignRecruitRole(member, regiment = 'moonlight') {
+  const roleId = regiment === 'sunshine' ? process.env.SUNSHINE_ROLE_ID : process.env.REGIMENT_ROLE_ID;
+  const recruitId = regiment === 'sunshine' ? (process.env.SUNSHINE_RECRUIT_ROLE_ID || process.env.RECRUIT_ROLE_ID) : process.env.RECRUIT_ROLE_ID;
+  if (!recruitId) return; // Recruit role is optional
+  await swapRoles(member, recruitId, roleId);
 }
 
 // Removed from the regiment → back to Recruit.
-async function removeRegimentRole(member) {
-  await swapRoles(member, process.env.RECRUIT_ROLE_ID, process.env.REGIMENT_ROLE_ID);
+async function removeRegimentRole(member, regiment = 'moonlight') {
+  const roleId = regiment === 'sunshine' ? process.env.SUNSHINE_ROLE_ID : process.env.REGIMENT_ROLE_ID;
+  const recruitId = regiment === 'sunshine' ? (process.env.SUNSHINE_RECRUIT_ROLE_ID || process.env.RECRUIT_ROLE_ID) : process.env.RECRUIT_ROLE_ID;
+  await swapRoles(member, recruitId, roleId);
 }
 
-function hasRegimentRole(member) {
-  return member.roles.cache.has(process.env.REGIMENT_ROLE_ID);
+function hasRegimentRole(member, regiment = 'moonlight') {
+  const roleId = regiment === 'sunshine' ? process.env.SUNSHINE_ROLE_ID : process.env.REGIMENT_ROLE_ID;
+  return roleId ? member.roles.cache.has(roleId) : false;
 }
 
 // ─── Channel Helpers ──────────────────────────────────────────────────────────

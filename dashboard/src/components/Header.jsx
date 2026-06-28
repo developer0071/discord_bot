@@ -1,7 +1,7 @@
 import { useApp } from '../context/AppContext';
 import './Header.css';
 
-export default function Header({ onAddMember }) {
+export default function Header({ onAddMember, onToggleSidebar }) {
   const { members, queue, loadData, showToast, logout, isMod, searchQuery, setSearchQuery } = useApp();
   const total = members.length;
   const active = members.filter(m => m.status === 'active').length;
@@ -9,6 +9,9 @@ export default function Header({ onAddMember }) {
 
   return (
     <header className="main-header" id="mainHeader">
+      <button className="btn btn-ghost btn-icon mobile-menu-btn" onClick={onToggleSidebar}>
+        <i className="fas fa-bars" />
+      </button>
       <div className="header-search">
         <i className="fas fa-search" />
         <input

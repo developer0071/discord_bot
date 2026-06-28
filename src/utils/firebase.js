@@ -22,14 +22,20 @@ if (!admin.apps.length) {
   });
 }
 
-const db = admin.firestore();
+const { getFirestore } = require('firebase-admin/firestore');
+const dbs = {
+  moonlight: getFirestore(),
+  sunshine: getFirestore(admin.app(), 'sunshine')
+};
+const getDb = (r = 'moonlight') => dbs[r] || dbs.moonlight;
 
 // ─── Regiment ────────────────────────────────────────────────────────────────
 
 /**
  * Get current regiment status: { currentCount, maxSlots, openSlots }
  */
-async function getRegimentStatus() {
+async function getRegimentStatus(regiment = 'moonlight') {
+  const db = getDb(regiment);
   const doc = await db.collection('config').doc('regiment').get();
   if (!doc.exists) {
     // First run: initialise config
@@ -51,7 +57,8 @@ async function getRegimentStatus() {
 /**
  * Increment or decrement the regiment member count
  */
-async function updateRegimentCount(delta) {
+async function updateRegimentCount(delta, regiment = 'moonlight') {
+  const db = getDb(regiment);
   const ref = db.collection('config').doc('regiment');
   await ref.update({
     currentCount: admin.firestore.FieldValue.increment(delta),
@@ -61,7 +68,8 @@ async function updateRegimentCount(delta) {
 /**
  * Manually update the max slots (admin command)
  */
-async function setMaxSlots(newMax) {
+async function setMaxSlots(newMax, regiment = 'moonlight') {
+  const db = getDb(regiment);
   await db.collection('config').doc('regiment').update({ maxSlots: newMax });
 }
 
@@ -71,7 +79,8 @@ async function setMaxSlots(newMax) {
  * Add a user to the waiting queue.
  * Returns their position (1-based).
  */
-async function addToQueue(userId, username) {
+async function addToQueue(userId, username, regiment = 'moonlight') {
+  const db = getDb(regiment);
   // Prevent duplicates
   const existing = await db.collection('queue').doc(userId).get();
   if (existing.exists) {
@@ -98,14 +107,16 @@ async function addToQueue(userId, username) {
 /**
  * Remove a user from the queue (they left or got promoted).
  */
-async function removeFromQueue(userId) {
+async function removeFromQueue(userId, regiment = 'moonlight') {
+  const db = getDb(regiment);
   await db.collection('queue').doc(userId).delete();
 }
 
 /**
  * Get full queue list ordered by votes (desc), then join time (asc).
  */
-async function getFullQueue() {
+async function getFullQueue(regiment = 'moonlight') {
+  const db = getDb(regiment);
   const snapshot = await db.collection('queue').get();
   const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
@@ -130,7 +141,8 @@ async function getFullQueue() {
  * Get the next person in queue (highest votes, then oldest joinedAt).
  * Returns the document data or null.
  */
-async function getNextInQueue() {
+async function getNextInQueue(regiment = 'moonlight') {
+  const db = getDb(regiment);
   const queue = await getFullQueue();
   if (queue.length === 0) return null;
   return queue[0];
@@ -139,7 +151,8 @@ async function getNextInQueue() {
 /**
  * Get a user's current position in the queue (1-based).
  */
-async function getQueuePosition(userId) {
+async function getQueuePosition(userId, regiment = 'moonlight') {
+  const db = getDb(regiment);
   const queue = await getFullQueue();
   const user = queue.find(u => u.userId === userId);
   return user ? user.position : null;
@@ -148,7 +161,8 @@ async function getQueuePosition(userId) {
 /**
  * Check if a user is currently in the queue.
  */
-async function isInQueue(userId) {
+async function isInQueue(userId, regiment = 'moonlight') {
+  const db = getDb(regiment);
   const doc = await db.collection('queue').doc(userId).get();
   return doc.exists;
 }
@@ -157,7 +171,8 @@ async function isInQueue(userId) {
  * Cast a vote for a user in the queue.
  * Limit: 1 vote per voter per 24 hours.
  */
-async function castQueueVote(voterId, targetUserId) {
+async function castQueueVote(voterId, targetUserId, regiment = 'moonlight') {
+  const db = getDb(regiment);
   const voteDoc = await db.collection('queue_votes').doc(voterId).get();
   const now = Date.now();
   
@@ -197,7 +212,8 @@ async function castQueueVote(voterId, targetUserId) {
 /**
  * Record a member as an official regiment member.
  */
-async function addMember(userId, username) {
+async function addMember(userId, username, regiment = 'moonlight') {
+  const db = getDb(regiment);
   await db.collection('members').doc(userId).set({
     userId,
     username,
@@ -209,7 +225,8 @@ async function addMember(userId, username) {
 /**
  * Remove a member record.
  */
-async function removeMember(userId) {
+async function removeMember(userId, regiment = 'moonlight') {
+  const db = getDb(regiment);
   const doc = await db.collection('members').doc(userId).get();
   if (doc.exists) {
     await db.collection('members').doc(userId).delete();
@@ -220,7 +237,8 @@ async function removeMember(userId) {
 /**
  * Check if a user is a regiment member.
  */
-async function isMember(userId) {
+async function isMember(userId, regiment = 'moonlight') {
+  const db = getDb(regiment);
   const doc = await db.collection('members').doc(userId).get();
   return doc.exists;
 }
@@ -228,7 +246,8 @@ async function isMember(userId) {
 /**
  * Get all regiment members, ordered by join time.
  */
-async function getAllMembers() {
+async function getAllMembers(regiment = 'moonlight') {
+  const db = getDb(regiment);
   const snapshot = await db.collection('members').orderBy('joinedAt').get();
   return snapshot.docs.map((doc) => doc.data());
 }
@@ -239,6 +258,7 @@ async function getAllMembers() {
  * Save/merge a user's profile (Discord info, Roblox username, families, etc.).
  */
 async function saveUserProfile(userId, data) {
+  const db = getDb('moonlight');
   await db.collection('users').doc(userId).set(data, { merge: true });
 }
 
@@ -246,6 +266,7 @@ async function saveUserProfile(userId, data) {
  * Get a user's saved profile, or null.
  */
 async function getUserProfile(userId) {
+  const db = getDb('moonlight');
   const doc = await db.collection('users').doc(userId).get();
   return doc.exists ? doc.data() : null;
 }
@@ -254,6 +275,7 @@ async function getUserProfile(userId) {
  * Get all saved user profiles.
  */
 async function getAllUsers() {
+  const db = getDb('moonlight');
   const snapshot = await db.collection('users').get();
   return snapshot.docs.map((doc) => doc.data());
 }
@@ -263,7 +285,8 @@ async function getAllUsers() {
 /**
  * Append an audit-log entry.
  */
-async function addLog(action, target, detail) {
+async function addLog(action, target, detail, regiment = 'moonlight') {
+  const db = getDb(regiment);
   await db.collection('logs').add({
     action,
     target: target || 'Unknown',
@@ -275,25 +298,29 @@ async function addLog(action, target, detail) {
 /**
  * Get the most recent audit-log entries (newest first).
  */
-async function getLogs(max = 50) {
+async function getLogs(max = 50, regiment = 'moonlight') {
+  const db = getDb(regiment);
   const snapshot = await db.collection('logs').orderBy('at', 'desc').limit(max).get();
   return snapshot.docs.map((doc) => doc.data());
 }
 
 // ─── Dashboard settings ─────────────────────────────────────────────────────────
 
-async function getDashboardSettings() {
+async function getDashboardSettings(regiment = 'moonlight') {
+  const db = getDb(regiment);
   const doc = await db.collection('config').doc('dashboard').get();
   return doc.exists ? doc.data() : {};
 }
 
-async function saveDashboardSettings(data) {
+async function saveDashboardSettings(data, regiment = 'moonlight') {
+  const db = getDb(regiment);
   await db.collection('config').doc('dashboard').set(data, { merge: true });
 }
 
 // ─── Giveaways ────────────────────────────────────────────────────────────────
 
-async function createGiveaway(id, data) {
+async function createGiveaway(id, data, regiment = 'moonlight') {
+  const db = getDb(regiment);
   await db.collection('giveaways').doc(id).set({
     ...data,
     entrants: {},
@@ -303,30 +330,36 @@ async function createGiveaway(id, data) {
   return id;
 }
 
-async function getGiveaway(id) {
+async function getGiveaway(id, regiment = 'moonlight') {
+  const db = getDb(regiment);
   const doc = await db.collection('giveaways').doc(id).get();
   return doc.exists ? { id: doc.id, ...doc.data() } : null;
 }
 
-async function getAllGiveaways() {
+async function getAllGiveaways(regiment = 'moonlight') {
+  const db = getDb(regiment);
   const snapshot = await db.collection('giveaways').orderBy('createdAt', 'desc').get();
   return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 }
 
-async function getGiveawaysByStatus(status) {
+async function getGiveawaysByStatus(status, regiment = 'moonlight') {
+  const db = getDb(regiment);
   const snapshot = await db.collection('giveaways').where('status', '==', status).get();
   return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 }
 
-async function updateGiveaway(id, data) {
+async function updateGiveaway(id, data, regiment = 'moonlight') {
+  const db = getDb(regiment);
   await db.collection('giveaways').doc(id).set(data, { merge: true });
 }
 
-async function deleteGiveaway(id) {
+async function deleteGiveaway(id, regiment = 'moonlight') {
+  const db = getDb(regiment);
   await db.collection('giveaways').doc(id).delete();
 }
 
-async function addGiveawayEntrant(giveawayId, userId, tag) {
+async function addGiveawayEntrant(giveawayId, userId, tag, regiment = 'moonlight') {
+  const db = getDb(regiment);
   await db.collection('giveaways').doc(giveawayId).set(
     {
       entrants: {
@@ -340,13 +373,15 @@ async function addGiveawayEntrant(giveawayId, userId, tag) {
   );
 }
 
-async function removeGiveawayEntrant(giveawayId, userId) {
+async function removeGiveawayEntrant(giveawayId, userId, regiment = 'moonlight') {
+  const db = getDb(regiment);
   await db.collection('giveaways').doc(giveawayId).update({
     [`entrants.${userId}`]: admin.firestore.FieldValue.delete(),
   });
 }
 
-async function isGiveawayEntrant(giveawayId, userId) {
+async function isGiveawayEntrant(giveawayId, userId, regiment = 'moonlight') {
+  const db = getDb(regiment);
   const doc = await db.collection('giveaways').doc(giveawayId).get();
   if (!doc.exists) return false;
   return !!(doc.data().entrants || {})[userId];
@@ -357,7 +392,8 @@ async function isGiveawayEntrant(giveawayId, userId) {
 /**
  * Record (or change) a user's vote for a poll. One vote per user.
  */
-async function setVote(pollId, userId, option) {
+async function setVote(pollId, userId, option, regiment = 'moonlight') {
+  const db = getDb(regiment);
   await db.collection('polls').doc(pollId).set(
     { votes: { [userId]: option } },
     { merge: true }
@@ -367,19 +403,22 @@ async function setVote(pollId, userId, option) {
 /**
  * Get all votes for a poll as { userId: option }.
  */
-async function getVotes(pollId) {
+async function getVotes(pollId, regiment = 'moonlight') {
+  const db = getDb(regiment);
   const doc = await db.collection('polls').doc(pollId).get();
   return doc.exists ? (doc.data().votes || {}) : {};
 }
 
 // ─── Private Servers ─────────────────────────────────────────────────────────
 
-async function getPrivateServers() {
+async function getPrivateServers(regiment = 'moonlight') {
+  const db = getDb(regiment);
   const snapshot = await db.collection('private_servers').orderBy('addedAt', 'desc').get();
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
-async function addPrivateServer(userId, tag, link) {
+async function addPrivateServer(userId, tag, link, regiment = 'moonlight') {
+  const db = getDb(regiment);
   // Overwrite if exists, so a user can only have 1 active
   await db.collection('private_servers').doc(userId).set({
     userId,
@@ -389,14 +428,16 @@ async function addPrivateServer(userId, tag, link) {
   });
 }
 
-async function deletePrivateServer(userId) {
+async function deletePrivateServer(userId, regiment = 'moonlight') {
+  const db = getDb(regiment);
   await db.collection('private_servers').doc(userId).delete();
 }
 
 /**
  * Sync the currentCount in config/regiment to exactly match the number of members.
  */
-async function syncRegimentCount() {
+async function syncRegimentCount(regiment = 'moonlight') {
+  const db = getDb(regiment);
   const snapshot = await db.collection('members').get();
   const count = snapshot.size;
   await db.collection('config').doc('regiment').update({ currentCount: count });
@@ -440,5 +481,5 @@ module.exports = {
   addPrivateServer,
   deletePrivateServer,
   castQueueVote,
-  getDb: () => db,
+  getDb,
 };

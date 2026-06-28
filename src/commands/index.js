@@ -275,17 +275,29 @@ const setupPanelCommand = {
   data: new SlashCommandBuilder()
     .setName('setuppanel')
     .setDescription('Post the regiment join panel (with buttons) in this channel')
-    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
+    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers)
+    .addStringOption(opt =>
+      opt.setName('regiment')
+        .setDescription('Which regiment panel to post')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Moonlight Soldiers', value: 'moonlight' },
+          { name: 'Sunshine Soldiers', value: 'sunshine' }
+        )
+    ),
 
   async execute(interaction) {
     if (!canManage(interaction.member)) return deny(interaction);
 
+    const regiment = interaction.options.getString('regiment');
+    const isMoonlight = regiment === 'moonlight';
+    
     const panel = new EmbedBuilder()
-      .setColor(0x5865f2)
-      .setTitle('🎖️ Join the Regiment')
+      .setColor(isMoonlight ? 0x5865f2 : 0xf1c40f)
+      .setTitle(`🎖️ Join ${isMoonlight ? 'Moonlight' : 'Sunshine'} Soldiers`)
       .setDescription(
         'Use the buttons below — no commands needed.\n\n' +
-        '**🎖️ Join Regiment** — enlist now (or join the queue if we\'re full)\n' +
+        `**🎖️ Join ${isMoonlight ? 'Moonlight' : 'Sunshine'}** — enlist now (or join the queue if we're full)\n` +
         '**📋 View Queue** — see open slots and the waiting list\n' +
         '**🎟️ My Position** — check your spot in the queue\n' +
         '**❌ Leave Queue** — drop out of the waiting list'
@@ -293,15 +305,15 @@ const setupPanelCommand = {
       .setFooter({ text: 'You will be promoted automatically when a slot opens.' });
 
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('regiment_join').setLabel('Join Regiment').setEmoji('🎖️').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId('regiment_queue').setLabel('View Queue').setEmoji('📋').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('regiment_position').setLabel('My Position').setEmoji('🎟️').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('regiment_leavequeue').setLabel('Leave Queue').setEmoji('❌').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`regiment_join_${regiment}`).setLabel(`Join ${isMoonlight ? 'Moonlight' : 'Sunshine'}`).setEmoji(isMoonlight ? '🌙' : '☀️').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`regiment_queue_${regiment}`).setLabel('View Queue').setEmoji('📋').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`regiment_position_${regiment}`).setLabel('My Position').setEmoji('🎟️').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`regiment_leavequeue_${regiment}`).setLabel('Leave Queue').setEmoji('❌').setStyle(ButtonStyle.Danger),
     );
 
     await interaction.channel.send({ embeds: [panel], components: [row] });
     await interaction.reply({
-      embeds: [successEmbed('Panel posted in this channel.')],
+      embeds: [successEmbed(`${isMoonlight ? 'Moonlight' : 'Sunshine'} panel posted in this channel.`)],
       flags: MessageFlags.Ephemeral,
     });
   },
