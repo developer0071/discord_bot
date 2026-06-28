@@ -548,7 +548,7 @@ load();
   // ── Promote the next person in the queue ──
   app.post('/api/promote', requireModSide, rlWrite, async (req, res) => {
     try {
-      await promoteFromQueue(guild(, req.regiment));
+      await promoteFromQueue(guild(), req.regiment);
       log('QUEUE_ACCEPTED', 'Next in queue', 'Promoted next from queue');
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
@@ -563,7 +563,7 @@ load();
       await fb.setMaxSlots(newMax, req.regiment);
       const status = await fb.getRegimentStatus(req.regiment);
       const toFill = Math.min(newMax - status.currentCount, 50); // cap at 50 promotions per call
-      for (let i = 0; i < toFill; i++) await promoteFromQueue(guild(, req.regiment));
+      for (let i = 0; i < toFill; i++) await promoteFromQueue(guild(), req.regiment);
       log('SETTINGS_CHANGED', 'System', `Max slots set to ${newMax}`);
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
