@@ -94,15 +94,25 @@ const promoteCommand = {
   data: new SlashCommandBuilder()
     .setName('promote')
     .setDescription('Promote the next person in queue into the regiment')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
+    .addStringOption(opt =>
+      opt.setName('regiment')
+        .setDescription('Which regiment to promote the user to')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Moonlight Soldiers', value: 'moonlight' },
+          { name: 'Sunshine Soldiers', value: 'sunshine' }
+        )
+    ),
 
   async execute(interaction) {
     if (!canAdd(interaction.member)) return deny(interaction);
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const regiment = interaction.options.getString('regiment');
     try {
-      await promoteFromQueue(interaction.guild);
+      await promoteFromQueue(interaction.guild, regiment);
       await interaction.editReply({
-        embeds: [successEmbed('Next person in queue has been promoted to the regiment.')],
+        embeds: [successEmbed(`Next person in queue has been promoted to the **${regiment}** regiment.`)],
       });
     } catch (err) {
       await interaction.editReply({ embeds: [errorEmbed(`Failed to promote: ${err.message}`)] });
@@ -197,18 +207,9 @@ const setSlotsCommand = {
 
     const status = await getRegimentStatus();
 
-    // If new max is higher than current count, auto-promote from queue (max 50 per call)
-    const slotsToFill = Math.min(newMax - status.currentCount, 50);
-    if (slotsToFill > 0) {
-      for (let i = 0; i < slotsToFill; i++) {
-        await promoteFromQueue(interaction.guild);
-      }
-    }
-
     await interaction.editReply({
       embeds: [successEmbed(
-        `Max slots updated to **${newMax}**.\n` +
-        (slotsToFill > 0 ? `Attempted to promote **${slotsToFill}** user(s) from queue.` : '')
+        `Max slots updated to **${newMax}**.`
       )],
     });
   },
@@ -236,10 +237,9 @@ const removeMemberCommand = {
       // member is null if the user already left the server — only the role swap needs them.
       if (member) await removeRegimentRole(member);
       await removeMember(user.id);
-      await promoteFromQueue(interaction.guild);
 
       await interaction.editReply({
-        embeds: [successEmbed(`**${user.tag}** has been removed from the regiment. Next person in queue (if any) has been promoted.`)],
+        embeds: [successEmbed(`**${user.tag}** has been removed from the regiment.`)],
       });
     } catch (err) {
       await interaction.editReply({ embeds: [errorEmbed(`Error: ${err.message}`)] });
@@ -275,45 +275,33 @@ const setupPanelCommand = {
   data: new SlashCommandBuilder()
     .setName('setuppanel')
     .setDescription('Post the regiment join panel (with buttons) in this channel')
-    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers)
-    .addStringOption(opt =>
-      opt.setName('regiment')
-        .setDescription('Which regiment panel to post')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Moonlight Soldiers', value: 'moonlight' },
-          { name: 'Sunshine Soldiers', value: 'sunshine' }
-        )
-    ),
+    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
 
   async execute(interaction) {
     if (!canManage(interaction.member)) return deny(interaction);
 
-    const regiment = interaction.options.getString('regiment');
-    const isMoonlight = regiment === 'moonlight';
-    
     const panel = new EmbedBuilder()
-      .setColor(isMoonlight ? 0x5865f2 : 0xf1c40f)
-      .setTitle(`🎖️ Join ${isMoonlight ? 'Moonlight' : 'Sunshine'} Soldiers`)
+      .setColor(0x5865f2)
+      .setTitle(`🎖️ Join the Regiment`)
       .setDescription(
         'Use the buttons below — no commands needed.\n\n' +
-        `**🎖️ Join ${isMoonlight ? 'Moonlight' : 'Sunshine'}** — enlist now (or join the queue if we're full)\n` +
-        '**📋 View Queue** — see open slots and the waiting list\n' +
+        `**🎖️ Join Queue** — enlist now to join the waiting list\n` +
+        '**📋 View Queue** — see the waiting list\n' +
         '**🎟️ My Position** — check your spot in the queue\n' +
         '**❌ Leave Queue** — drop out of the waiting list'
       )
-      .setFooter({ text: 'You will be promoted automatically when a slot opens.' });
+      .setFooter({ text: 'You will be promoted by a moderator when a slot opens.' });
 
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`regiment_join_${regiment}`).setLabel(`Join ${isMoonlight ? 'Moonlight' : 'Sunshine'}`).setEmoji(isMoonlight ? '🌙' : '☀️').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId(`regiment_queue_${regiment}`).setLabel('View Queue').setEmoji('📋').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(`regiment_position_${regiment}`).setLabel('My Position').setEmoji('🎟️').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(`regiment_leavequeue_${regiment}`).setLabel('Leave Queue').setEmoji('❌').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`regiment_join_unified`).setLabel(`Join Queue`).setEmoji('🎖️').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`regiment_queue_unified`).setLabel('View Queue').setEmoji('📋').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`regiment_position_unified`).setLabel('My Position').setEmoji('🎟️').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`regiment_leavequeue_unified`).setLabel('Leave Queue').setEmoji('❌').setStyle(ButtonStyle.Danger),
     );
 
     await interaction.channel.send({ embeds: [panel], components: [row] });
     await interaction.reply({
-      embeds: [successEmbed(`${isMoonlight ? 'Moonlight' : 'Sunshine'} panel posted in this channel.`)],
+      embeds: [successEmbed(`Unified Regiment Queue panel posted in this channel.`)],
       flags: MessageFlags.Ephemeral,
     });
   },

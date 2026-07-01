@@ -219,7 +219,7 @@ async function addMember(userId, username, regiment = 'moonlight') {
     username,
     joinedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
-  await updateRegimentCount(1);
+  await updateRegimentCount(1, regiment);
 }
 
 /**
@@ -230,7 +230,7 @@ async function removeMember(userId, regiment = 'moonlight') {
   const doc = await db.collection('members').doc(userId).get();
   if (doc.exists) {
     await db.collection('members').doc(userId).delete();
-    await updateRegimentCount(-1);
+    await updateRegimentCount(-1, regiment);
   }
 }
 

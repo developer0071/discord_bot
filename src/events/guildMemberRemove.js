@@ -35,8 +35,7 @@ module.exports = {
         if (wasInReg || hasRegimentRole(member, reg)) {
           await removeMember(member.id, reg);
           await notifyAdmins(member.guild, adminNotifyEmbed(member, 'left'), reg);
-          console.log(`[LEAVE] ${member.user.tag} removed from ${reg} regiment`);
-          await promoteFromQueue(member.guild, reg);
+          console.log(`[LEAVE] ${member.user.tag} removed from ${reg} regiment. Slot opened, waiting for manual promotion.`);
         }
       };
 

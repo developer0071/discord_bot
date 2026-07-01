@@ -44,21 +44,23 @@ const {
 
 // ─── Core join (assumes the interaction is already deferred) ──────────────────
 async function doJoin(interaction, member, regiment) {
-  const status = await getRegimentStatus(regiment);
+  if (regiment !== 'unified') {
+    const status = await getRegimentStatus(regiment);
 
-  if (status.openSlots > 0) {
-    try {
-      await assignRegimentRole(member, regiment);
-    } catch (err) {
-      console.error('[join] role assign failed:', err.message);
-      return interaction.editReply({
-        embeds: [errorEmbed("I couldn't assign the regiment role — an admin needs to check my **Manage Roles** permission and role position.")],
-        components: [],
-      });
+    if (status.openSlots > 0) {
+      try {
+        await assignRegimentRole(member, regiment);
+      } catch (err) {
+        console.error('[join] role assign failed:', err.message);
+        return interaction.editReply({
+          embeds: [errorEmbed("I couldn't assign the regiment role — an admin needs to check my **Manage Roles** permission and role position.")],
+          components: [],
+        });
+      }
+      await addMember(member.id, member.user.tag, regiment);
+      await notifyAdmins(interaction.guild, adminNotifyEmbed(member, 'joined'), regiment);
+      return interaction.editReply({ embeds: [welcomeEmbed(member)], components: [] });
     }
-    await addMember(member.id, member.user.tag, regiment);
-    await notifyAdmins(interaction.guild, adminNotifyEmbed(member, 'joined'), regiment);
-    return interaction.editReply({ embeds: [welcomeEmbed(member)], components: [] });
   }
 
   const { position } = await addToQueue(member.id, member.user.tag, regiment);
@@ -121,7 +123,8 @@ async function showJoinModal(interaction, regiment) {
 }
 
 async function handleJoinModal(interaction) {
-  const regiment = interaction.customId.replace("join_modal_", "");
+  let regiment = interaction.customId.replace("join_modal_", "");
+  if (regiment === "join_modal") regiment = "moonlight";
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const roblox = interaction.fields.getTextInputValue('roblox_username').trim();
 
@@ -146,7 +149,8 @@ async function handleJoinModal(interaction) {
 }
 
 async function handleJoinFamilies(interaction) {
-  const regiment = interaction.customId.replace("join_families_", "");
+  let regiment = interaction.customId.replace("join_families_", "");
+  if (regiment === "join_families") regiment = "moonlight";
   await interaction.deferUpdate();
 
   const chosen = interaction.values;
@@ -289,11 +293,17 @@ async function handleButton(interaction) {
     const r = interaction.customId.replace('regiment_join_', '');
     return handleJoin(interaction, r);
   }
+  if (interaction.customId === 'regiment_join') {
+    return handleJoin(interaction, 'moonlight');
+  }
 
   // ── The button sent by handleJoin if they need to link Roblox (instant modal) ──
   if (interaction.customId.startsWith('open_join_modal_')) {
     const r = interaction.customId.replace('open_join_modal_', '');
     return showJoinModal(interaction, r);
+  }
+  if (interaction.customId === 'open_join_modal') {
+    return showJoinModal(interaction, 'moonlight');
   }
 
   // ── Other regiment buttons (need Firestore work → defer first) ──
@@ -303,6 +313,11 @@ async function handleButton(interaction) {
     if (interaction.customId.startsWith(key + '_')) {
       handler = handlers[key];
       regimentMatch = interaction.customId.replace(key + '_', '');
+      break;
+    }
+    if (interaction.customId === key) {
+      handler = handlers[key];
+      regimentMatch = 'moonlight';
       break;
     }
   }

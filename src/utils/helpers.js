@@ -124,10 +124,26 @@ async function assignRegimentRole(member, regiment = 'moonlight') {
 
 // Waiting in queue: give Recruit, take Cadet.
 async function assignRecruitRole(member, regiment = 'moonlight') {
-  const roleId = regiment === 'sunshine' ? process.env.SUNSHINE_ROLE_ID : process.env.REGIMENT_ROLE_ID;
-  const recruitId = regiment === 'sunshine' ? (process.env.SUNSHINE_RECRUIT_ROLE_ID || process.env.RECRUIT_ROLE_ID) : process.env.RECRUIT_ROLE_ID;
-  if (!recruitId) return; // Recruit role is optional
-  await swapRoles(member, recruitId, roleId);
+  let roleId, recruitId;
+  if (regiment === 'sunshine') {
+    roleId = process.env.SUNSHINE_ROLE_ID;
+    recruitId = process.env.SUNSHINE_RECRUIT_ROLE_ID || process.env.RECRUIT_ROLE_ID;
+  } else if (regiment === 'moonlight') {
+    roleId = process.env.REGIMENT_ROLE_ID;
+    recruitId = process.env.RECRUIT_ROLE_ID;
+  } else {
+    // unified
+    recruitId = process.env.RECRUIT_ROLE_ID;
+  }
+  
+  if (!recruitId) return;
+
+  if (regiment === 'unified') {
+    if (process.env.REGIMENT_ROLE_ID) await swapRoles(member, recruitId, process.env.REGIMENT_ROLE_ID);
+    if (process.env.SUNSHINE_ROLE_ID) await swapRoles(member, null, process.env.SUNSHINE_ROLE_ID);
+  } else {
+    await swapRoles(member, recruitId, roleId);
+  }
 }
 
 // Removed from the regiment → back to Recruit.

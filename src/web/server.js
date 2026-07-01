@@ -124,7 +124,7 @@ function startWebServer(client) {
   app.use('/family', express.static(path.join(rootDir, 'family')));
   app.use('/logo.png', express.static(path.join(rootDir, 'logo.png')));
   // Write an audit-log entry (best-effort, never blocks an action).
-  const log = (action, target, detail) => fb.addLog(action, target, detail).catch(() => {});
+  const log = (req, action, target, detail) => fb.addLog(action, target, detail, req.regiment).catch(() => {});
 
   // ── Auth: "Login with Discord" → signed session token ──
   // Only guild members holding a REGIMENT_MANAGE_ROLE_IDS role may sign in.
@@ -151,7 +151,7 @@ function startWebServer(client) {
 
       const tier = getDashboardTier(member);
       const session = auth.makeSession({ id: discordUser.id, tag: member.user.tag, tier });
-      log('DASHBOARD_LOGIN', member.user.tag, `Signed in to the dashboard (${tier})`);
+      log(req, 'DASHBOARD_LOGIN', member.user.tag, `Signed in to the dashboard (${tier})`);
       res.redirect(`${safeRedirect(st.redirect)}#token=${encodeURIComponent(session)}`);
     } catch (e) {
       console.error('[web] auth callback:', e);
@@ -292,6 +292,18 @@ load();
   // ── Data (with server-side cache to reduce Firestore reads) ──
   let dataCache = { moonlight: null, sunshine: null };
   let dataCacheTime = { moonlight: 0, sunshine: 0 };
+
+  // Clear data cache on any mutating API call
+  app.use('/api', (req, res, next) => {
+    if (req.method !== 'GET') {
+      const originalJson = res.json;
+      res.json = function (body) {
+        if (req.regiment && body && body.ok) dataCacheTime[req.regiment] = 0;
+        return originalJson.call(this, body);
+      };
+    }
+    next();
+  });
   
   const DATA_CACHE_TTL = 60_000; // 60 seconds
 
@@ -350,7 +362,7 @@ load();
       if (rolesToAdd.length) await member.roles.add(rolesToAdd).catch(() => {});
 
       await fb.saveUserProfile(req.user.id, { families: validSelection });
-      log('FAMILY_UPDATED', req.user.tag, `Updated families to: ${validSelection.join(', ') || 'none'}`);
+      log(req, 'FAMILY_UPDATED', req.user.tag, `Updated families to: ${validSelection.join(', ') || 'none'}`);
 
       res.json({ ok: true, families: validSelection });
     } catch (e) {
@@ -440,7 +452,7 @@ load();
       await assignRegimentRole(member, req.regiment);
       await fb.removeFromQueue(userId, req.regiment);
       await fb.addMember(userId, member.user.tag, req.regiment);
-      log('QUEUE_ACCEPTED', member.user.tag, 'Accepted from queue');
+      log(req, 'QUEUE_ACCEPTED', member.user.tag, 'Accepted from queue');
       await notifyAdmins(guild(), adminNotifyEmbed(member, 'joined'), req.regiment);
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
@@ -451,7 +463,7 @@ load();
     try {
       const member = await fetchMember(req.body.userId);
       await fb.removeFromQueue(req.body.userId, req.regiment);
-      log('QUEUE_REJECTED', member?.user.tag || req.body.userId, 'Removed from queue');
+      log(req, 'QUEUE_REJECTED', member?.user.tag || req.body.userId, 'Removed from queue');
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
@@ -463,7 +475,7 @@ load();
       const member = await fetchMember(userId);
       if (member) await removeRegimentRole(member, req.regiment).catch(() => {});
       await fb.removeMember(userId, req.regiment);
-      log('MEMBER_KICKED', member?.user.tag || userId, 'Removed from regiment');
+      log(req, 'MEMBER_KICKED', member?.user.tag || userId, 'Removed from regiment');
       if (member) await notifyAdmins(guild(), adminNotifyEmbed(member, 'left'), req.regiment);
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
@@ -488,7 +500,7 @@ load();
       if (await fb.isInQueue(member.id, req.regiment)) await fb.removeFromQueue(member.id, req.regiment);
       if (!(await fb.isMember(member.id, req.regiment))) await fb.addMember(member.id, member.user.tag, req.regiment);
       if (roblox) await fb.saveUserProfile(member.id, { discordId: member.id, discordTag: member.user.tag, robloxUsername: roblox });
-      log('MEMBER_ADDED', member.user.tag, 'Added to regiment');
+      log(req, 'MEMBER_ADDED', member.user.tag, 'Added to regiment');
       await notifyAdmins(guild(), adminNotifyEmbed(member, 'joined'), req.regiment);
       res.json({ ok: true, tag: member.user.tag });
     } catch (e) { res.status(400).json({ error: e.message }); }
@@ -551,7 +563,7 @@ load();
       }
 
       const newCount = await fb.syncRegimentCount(req.regiment);
-      log('MEMBERS_SYNCED', req.user.tag, `Synced members: added ${added}, removed ${removed}, total ${newCount}`);
+      log(req, 'MEMBERS_SYNCED', req.user.tag, `Synced members: added ${added}, removed ${removed}, total ${newCount}`);
       res.json({ ok: true, added, removed, total: newCount });
     } catch (e) {
       console.error('[web] /api/sync error:', e);
@@ -563,7 +575,7 @@ load();
   app.post('/api/promote', requireModSide, rlWrite, async (req, res) => {
     try {
       await promoteFromQueue(guild(), req.regiment);
-      log('QUEUE_ACCEPTED', 'Next in queue', 'Promoted next from queue');
+      log(req, 'QUEUE_ACCEPTED', 'Next in queue', 'Promoted next from queue');
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
@@ -578,7 +590,7 @@ load();
       const status = await fb.getRegimentStatus(req.regiment);
       const toFill = Math.min(newMax - status.currentCount, 50); // cap at 50 promotions per call
       for (let i = 0; i < toFill; i++) await promoteFromQueue(guild(), req.regiment);
-      log('SETTINGS_CHANGED', 'System', `Max slots set to ${newMax}`);
+      log(req, 'SETTINGS_CHANGED', 'System', `Max slots set to ${newMax}`);
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
@@ -761,7 +773,7 @@ load();
       // Always post to Discord immediately so users can see and enter
       await giveawayUtil.postGiveaway(client, { id, ...data });
 
-      log('GIVEAWAY_CREATED', req.user.tag, `Created "${title.trim()}" (${id})`);
+      log(req, 'GIVEAWAY_CREATED', req.user.tag, `Created "${title.trim()}" (${id})`);
       res.json({ ok: true, id });
     } catch (e) {
       console.error('[web] create giveaway:', e);
@@ -773,7 +785,7 @@ load();
     try {
       const result = await giveawayUtil.endGiveaway(client, req.params.id);
       if (!result) return res.status(404).json({ error: 'Giveaway not found or already ended' });
-      log('GIVEAWAY_ENDED', req.user.tag, `Ended giveaway ${req.params.id}`);
+      log(req, 'GIVEAWAY_ENDED', req.user.tag, `Ended giveaway ${req.params.id}`);
       res.json({ ok: true, winners: result.winners });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
@@ -804,7 +816,7 @@ load();
         }
       }
 
-      log('GIVEAWAY_REROLL', req.user.tag, `Rerolled ${req.params.id}`);
+      log(req, 'GIVEAWAY_REROLL', req.user.tag, `Rerolled ${req.params.id}`);
       res.json({ ok: true, winners });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
@@ -824,7 +836,7 @@ load();
 
       await fb.updateGiveaway(req.params.id, { status: 'cancelled' }, req.regiment);
       await fb.deleteGiveaway(req.params.id);
-      log('GIVEAWAY_DELETED', req.user.tag, `Deleted ${req.params.id}`);
+      log(req, 'GIVEAWAY_DELETED', req.user.tag, `Deleted ${req.params.id}`);
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
@@ -846,7 +858,7 @@ load();
         autoAccept: autoAccept || '',
         kickReason: kickReason || '',
       });
-      log('SETTINGS_CHANGED', 'System', 'Dashboard settings updated');
+      log(req, 'SETTINGS_CHANGED', 'System', 'Dashboard settings updated');
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
@@ -864,7 +876,7 @@ load();
       const { link } = req.body;
       if (!link) return res.status(400).json({ error: 'Server link or code required' });
       await fb.addPrivateServer(req.user.id, req.user.tag, link);
-      log('PRIVATE_SERVER_ADDED', req.user.tag, 'Added a private server link');
+      log(req, 'PRIVATE_SERVER_ADDED', req.user.tag, 'Added a private server link');
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
@@ -875,7 +887,7 @@ load();
         return res.status(403).json({ error: 'You can only delete your own server' });
       }
       await fb.deletePrivateServer(req.params.id);
-      log('PRIVATE_SERVER_REMOVED', req.user.tag, 'Removed private server link');
+      log(req, 'PRIVATE_SERVER_REMOVED', req.user.tag, 'Removed private server link');
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });

@@ -83,10 +83,10 @@ client.on('interactionCreate', async interaction => {
 
     } else if (interaction.isModalSubmit()) {
       if (interaction.customId === 'verify_modal') await verification.handleVerifyModal(interaction);
-      else if (interaction.customId.startsWith('join_modal_')) await handleJoinModal(interaction);
+      else if (interaction.customId.startsWith('join_modal_') || interaction.customId === 'join_modal') await handleJoinModal(interaction);
     } else if (interaction.isStringSelectMenu()) {
       if (interaction.customId === 'verify_families') await verification.handleFamilySelect(interaction);
-      else if (interaction.customId.startsWith('join_families_')) await handleJoinFamilies(interaction);
+      else if (interaction.customId.startsWith('join_families_') || interaction.customId === 'join_families') await handleJoinFamilies(interaction);
     }
   } catch (err) {
     console.error('[Interaction Error]', err);
