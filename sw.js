@@ -1,4 +1,4 @@
-const CACHE_NAME = 'v6';
+const CACHE_NAME = 'v9';
 
 // Install event - cache core assets
 self.addEventListener('install', event => {
