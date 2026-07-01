@@ -97,7 +97,12 @@ function startWebServer(client) {
   const rootDir = path.join(__dirname, '..', '..');
   const guild = () => client.guilds.cache.first();
   const fetchMember = async (userId) => {
-    try { return await guild().members.fetch(userId); } catch { return null; }
+    if (!userId || typeof userId !== 'string') return null;
+    try { 
+      const g = guild();
+      if (!g) return null;
+      return await g.members.fetch({ user: userId, cache: true });
+    } catch { return null; }
   };
 
   // Only redirect back to known origins after login (prevents open redirects).
@@ -389,7 +394,7 @@ load();
         isReadOnly ? Promise.resolve([]) : fb.getAllUsers(),
         isReadOnly ? Promise.resolve([]) : fb.getLogs(50, req.regiment),
         isReadOnly ? Promise.resolve({}) : fb.getDashboardSettings(req.regiment),
-        g ? g.members.fetch() : Promise.resolve(new Map())
+        g ? Promise.resolve(g.members.cache) : Promise.resolve(new Map())
       ]);
       const getAvatar = (id) => {
         const m = allDiscordMembers.get(id);

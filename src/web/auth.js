@@ -146,7 +146,7 @@ function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'Not authenticated' });
   }
   req.user = {
-    id: payload.sub,
+    id: payload.sub || payload.id,
     tag: payload.name,
     tier: payload.tier === 'readonly' ? 'readonly' : 'mod',
   };
