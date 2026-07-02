@@ -801,6 +801,70 @@ const fixRoleCommand = {
   },
 };
 
+// ─── /givechannelaccess — MANAGE (grant permissions) ──────────────────────────
+const giveChannelAccessCommand = {
+  data: new SlashCommandBuilder()
+    .setName('givechannelaccess')
+    .setDescription('Grant specific permissions to a role for a category or channel')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addRoleOption(opt =>
+      opt.setName('role')
+        .setDescription('The role to grant access to (e.g. SunCadet)')
+        .setRequired(true)
+    )
+    .addChannelOption(opt =>
+      opt.setName('target')
+        .setDescription('The category or channel to modify')
+        .setRequired(true)
+    )
+    .addBooleanOption(opt =>
+      opt.setName('view_channel')
+        .setDescription('Grant View Channel permission? (True = Yes, False = Leave unchanged)')
+        .setRequired(true)
+    )
+    .addBooleanOption(opt =>
+      opt.setName('send_messages')
+        .setDescription('Grant Send Messages permission? (True = Yes, False = Leave unchanged)')
+        .setRequired(true)
+    )
+    .addBooleanOption(opt =>
+      opt.setName('read_history')
+        .setDescription('Grant Read Message History permission? (True = Yes, False = Leave unchanged)')
+        .setRequired(true)
+    ),
+
+  async execute(interaction) {
+    if (!canManage(interaction.member)) return deny(interaction);
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    
+    const role = interaction.options.getRole('role');
+    const target = interaction.options.getChannel('target');
+    const view = interaction.options.getBoolean('view_channel');
+    const send = interaction.options.getBoolean('send_messages');
+    const read = interaction.options.getBoolean('read_history');
+
+    const permsToSet = {};
+    if (view) permsToSet.ViewChannel = true;
+    if (send) permsToSet.SendMessages = true;
+    if (read) permsToSet.ReadMessageHistory = true;
+
+    if (Object.keys(permsToSet).length === 0) {
+      return interaction.editReply({ embeds: [errorEmbed('You must select True for at least one permission to grant.')] });
+    }
+
+    try {
+      await target.permissionOverwrites.edit(role.id, permsToSet);
+      
+      const grantedList = Object.keys(permsToSet).join(', ');
+      await interaction.editReply({ 
+        embeds: [successEmbed(`Successfully granted **${grantedList}** to **${role.name}** in **${target.name}**.`)] 
+      });
+    } catch (err) {
+      await interaction.editReply({ embeds: [errorEmbed(`Failed to update permissions: ${err.message}`)] });
+    }
+  },
+};
+
 module.exports = [
   queueCommand,
   myPositionCommand,
@@ -820,4 +884,5 @@ module.exports = [
   transferBannerCommand,
   transferSunBannerCommand,
   fixRoleCommand,
+  giveChannelAccessCommand,
 ];
