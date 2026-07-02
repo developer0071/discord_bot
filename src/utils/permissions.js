@@ -33,10 +33,18 @@ function canAdd(member) {
 /**
  * Full dashboard power — can add, kick, change settings, manage giveaways, etc.
  */
-function isModSide(member, regiment = 'moonlight') {
+function isModSide(member, regiment = null) {
   if (hasAnyRole(member, roleIds('MODS_SIDE'))) return true;
-  if (regiment === 'sunshine' && hasAnyRole(member, roleIds('SUNSHINE_MODS'))) return true;
-  if (regiment === 'moonlight' && hasAnyRole(member, roleIds('MOONLIGHT_MODS'))) return true;
+  
+  if (regiment === 'sunshine') {
+    if (hasAnyRole(member, roleIds('SUNSHINE_MODS'))) return true;
+  } else if (regiment === 'moonlight') {
+    if (hasAnyRole(member, roleIds('MOONLIGHT_MODS'))) return true;
+  } else {
+    // No specific regiment specified: allow if they are a mod of ANY regiment
+    if (hasAnyRole(member, roleIds('SUNSHINE_MODS'))) return true;
+    if (hasAnyRole(member, roleIds('MOONLIGHT_MODS'))) return true;
+  }
   return false;
 }
 
@@ -51,7 +59,7 @@ function isNormalSide(member) {
  * Returns 'mod', 'readonly', or null if the member may not use the dashboard.
  * Mods take precedence when a user holds both role sets.
  */
-function getDashboardTier(member, regiment = 'moonlight') {
+function getDashboardTier(member, regiment = null) {
   if (isModSide(member, regiment)) return 'mod';
   if (isNormalSide(member)) return 'readonly';
   // Legacy fallback while HAVE_ACCESS_ROLES is still configured
@@ -62,7 +70,7 @@ function getDashboardTier(member, regiment = 'moonlight') {
 /**
  * Allowed to sign in to the web dashboard (mods or read-only viewers).
  */
-function canAccessDashboard(member, regiment = 'moonlight') {
+function canAccessDashboard(member, regiment = null) {
   return getDashboardTier(member, regiment) !== null;
 }
 
