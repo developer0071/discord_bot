@@ -15,9 +15,11 @@ const { successEmbed, errorEmbed } = require('../utils/helpers');
 function isVerified(member) {
   const verifiedId = process.env.VERIFIED_ROLE_ID;
   const cadetId = process.env.REGIMENT_ROLE_ID;
+  const sunshineId = process.env.SUNSHINE_ROLE_ID;
   return (
     (verifiedId && member.roles.cache.has(verifiedId)) ||
-    (cadetId && member.roles.cache.has(cadetId))
+    (cadetId && member.roles.cache.has(cadetId)) ||
+    (sunshineId && member.roles.cache.has(sunshineId))
   );
 }
 

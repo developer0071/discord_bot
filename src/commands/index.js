@@ -718,6 +718,89 @@ const transferSunBannerCommand = {
     });
   },
 };
+// ─── /fixrole — MANAGE (swap roles) ────────────────────────────────────────────────
+const fixRoleCommand = {
+  data: new SlashCommandBuilder()
+    .setName('fixrole')
+    .setDescription('Swap roles for a user (e.g. remove Recruit, add Suncadet)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
+    .addUserOption(opt =>
+      opt.setName('user')
+        .setDescription('The user to modify')
+        .setRequired(true)
+    )
+    .addRoleOption(opt =>
+      opt.setName('remove')
+        .setDescription('Role to remove (e.g., Recruit)')
+        .setRequired(false)
+    )
+    .addRoleOption(opt =>
+      opt.setName('add')
+        .setDescription('Role to add (e.g., Suncadet)')
+        .setRequired(false)
+    ),
+
+  async execute(interaction) {
+    if (!canManage(interaction.member)) return deny(interaction);
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    
+    const user = interaction.options.getUser('user');
+    const member = interaction.options.getMember('user');
+    const removeRole = interaction.options.getRole('remove');
+    const addRole = interaction.options.getRole('add');
+
+    if (!member) {
+      return interaction.editReply({ embeds: [errorEmbed('That user is not in this server.')] });
+    }
+    
+    if (!removeRole && !addRole) {
+      return interaction.editReply({ embeds: [errorEmbed('You must specify a role to remove or add (or both).')] });
+    }
+    
+    // Check role hierarchy before attempting changes
+    const botMember = interaction.guild.members.me;
+    if (removeRole && removeRole.position >= botMember.roles.highest.position) {
+      return interaction.editReply({ embeds: [errorEmbed(`I can't remove **${removeRole.name}** — it's higher than or equal to my highest role.`)] });
+    }
+    if (addRole && addRole.position >= botMember.roles.highest.position) {
+      return interaction.editReply({ embeds: [errorEmbed(`I can't assign **${addRole.name}** — it's higher than or equal to my highest role.`)] });
+    }
+
+    let replyMsg = `Fixed roles for **${user.tag}**:`;
+    let changesMade = false;
+    
+    try {
+      if (removeRole) {
+        if (member.roles.cache.has(removeRole.id)) {
+          await member.roles.remove(removeRole);
+          replyMsg += `\n➖ Removed **${removeRole.name}**`;
+          changesMade = true;
+        } else {
+          replyMsg += `\n⚠️ User didn't have **${removeRole.name}**`;
+        }
+      }
+      
+      if (addRole) {
+        if (!member.roles.cache.has(addRole.id)) {
+          await member.roles.add(addRole);
+          replyMsg += `\n➕ Added **${addRole.name}**`;
+          changesMade = true;
+        } else {
+          replyMsg += `\n⚠️ User already had **${addRole.name}**`;
+        }
+      }
+      
+      if (!changesMade) {
+        replyMsg += `\n\nNo actual role changes were needed.`;
+      }
+      
+      await interaction.editReply({ embeds: [successEmbed(replyMsg)] });
+    } catch (err) {
+      await interaction.editReply({ embeds: [errorEmbed(`Error modifying roles: ${err.message}`)] });
+    }
+  },
+};
+
 module.exports = [
   queueCommand,
   myPositionCommand,
@@ -736,4 +819,5 @@ module.exports = [
   utcCommand,
   transferBannerCommand,
   transferSunBannerCommand,
+  fixRoleCommand,
 ];

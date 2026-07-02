@@ -11,6 +11,7 @@ const {
 
 const guildMemberAdd    = require('./events/guildMemberAdd');
 const guildMemberRemove = require('./events/guildMemberRemove');
+const guildMemberUpdate = require('./events/guildMemberUpdate');
 const messageCreate     = require('./events/messageCreate');
 const { handleButton, handleJoinModal, handleJoinFamilies } = require('./events/buttons');
 const verification      = require('./events/verification');
@@ -48,6 +49,7 @@ client.once('clientReady', async () => {
 
 client.on('guildMemberAdd',    member => guildMemberAdd.execute(member));
 client.on('guildMemberRemove', member => guildMemberRemove.execute(member));
+client.on('guildMemberUpdate', (oldMember, newMember) => guildMemberUpdate.execute(oldMember, newMember));
 client.on('messageCreate',     message => messageCreate.execute(message));
 
 const { RateLimiter } = require('./utils/ratelimit');
