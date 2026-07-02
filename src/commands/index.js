@@ -6,6 +6,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
+  ChannelType,
 } = require('discord.js');
 const {
   getRegimentStatus,
@@ -816,6 +817,13 @@ const giveChannelAccessCommand = {
       opt.setName('target')
         .setDescription('The category or channel to modify')
         .setRequired(true)
+        .addChannelTypes(
+          ChannelType.GuildCategory,
+          ChannelType.GuildText,
+          ChannelType.GuildVoice,
+          ChannelType.GuildAnnouncement,
+          ChannelType.GuildForum
+        )
     )
     .addBooleanOption(opt =>
       opt.setName('view_channel')
