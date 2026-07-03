@@ -593,8 +593,9 @@ load();
       await fb.getRegimentStatus(req.regiment); // ensure config doc exists
       await fb.setMaxSlots(newMax, req.regiment);
       const status = await fb.getRegimentStatus(req.regiment);
-      const toFill = Math.min(newMax - status.currentCount, 50); // cap at 50 promotions per call
-      for (let i = 0; i < toFill; i++) await promoteFromQueue(guild(), req.regiment);
+      // AUTO ADD DISABLED
+      // const toFill = Math.min(newMax - status.currentCount, 50); // cap at 50 promotions per call
+      // for (let i = 0; i < toFill; i++) await promoteFromQueue(guild(), req.regiment);
       log(req, 'SETTINGS_CHANGED', 'System', `Max slots set to ${newMax}`);
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
@@ -854,9 +855,10 @@ load();
       if (Number.isInteger(max) && max >= 0 && max <= 500) {
         await fb.getRegimentStatus(req.regiment);
         await fb.setMaxSlots(max, req.regiment);
-        const status = await fb.getRegimentStatus(req.regiment);
-        const toFill = Math.min(max - status.currentCount, 50); // cap at 50 promotions per call
-        for (let i = 0; i < toFill; i++) await promoteFromQueue(guild(), req.regiment);
+        // AUTO ADD DISABLED
+        // const status = await fb.getRegimentStatus(req.regiment);
+        // const toFill = Math.min(max - status.currentCount, 50); // cap at 50 promotions per call
+        // for (let i = 0; i < toFill; i++) await promoteFromQueue(guild(), req.regiment);
       }
       await fb.saveDashboardSettings({
         name: name || '',
