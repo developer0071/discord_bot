@@ -12,7 +12,7 @@ export default function Settings() {
   useEffect(() => {
     setName(settings.name || 'Moonlight Soldiers');
     setMaxSize(regimentStatus?.maxSlots ?? '');
-    setAutoAccept(settings.autoAccept || '48');
+    setAutoAccept(settings.autoAccept !== undefined ? settings.autoAccept : '48');
     setKickReason(settings.kickReason || 'Removed from regiment by command.');
   }, [settings, regimentStatus]);
 
