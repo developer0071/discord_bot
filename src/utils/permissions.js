@@ -20,7 +20,7 @@ function hasAnyRole(member, ids) {
  * Full control: add people, kick people, and manage slots/panel.
  */
 function canManage(member) {
-  return hasAnyRole(member, roleIds('REGIMENT_MANAGE_ROLE_IDS'));
+  return hasAnyRole(member, roleIds('REGIMENT_MANAGE_ROLE_IDS')) || hasAnyRole(member, roleIds('HAVE_ACCESS_ROLES'));
 }
 
 /**
@@ -35,6 +35,7 @@ function canAdd(member) {
  */
 function isModSide(member, regiment = null) {
   if (hasAnyRole(member, roleIds('MODS_SIDE'))) return true;
+  if (hasAnyRole(member, roleIds('HAVE_ACCESS_ROLES'))) return true;
   
   if (regiment === 'sunshine') {
     if (hasAnyRole(member, roleIds('SUNSHINE_MODS'))) return true;
