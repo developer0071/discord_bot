@@ -1,6 +1,6 @@
 // ── API layer — mirrors app-api.js but as clean ES modules ──
 
-const DEFAULT_API_BASE = 'https://api.hunterstar.online';
+const DEFAULT_API_BASE = 'https://api.moonlightsoldiers.xyz';
 
 export function getApiBase() {
   return (localStorage.getItem('dash_api') || DEFAULT_API_BASE).replace(/\/+$/, '');
