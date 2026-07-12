@@ -19,6 +19,7 @@ const {
   isMember,
   isInQueue,
   getAllMembers,
+  syncRegimentCount,
 } = require('../utils/firebase');
 
 const {
@@ -873,6 +874,91 @@ const giveChannelAccessCommand = {
   },
 };
 
+// ─── /syncdata — Auto Sync Databases ──────────────────────────────────────────
+const syncDataCommand = {
+  data: new SlashCommandBuilder()
+    .setName('syncdata')
+    .setDescription('Auto-analyze and synchronize Discord members with the website databases')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  async execute(interaction) {
+    if (!canManage(interaction.member)) return deny(interaction);
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const moonlightRoleId = process.env.REGIMENT_ROLE_ID;
+    const sunshineRoleId = process.env.SUNSHINE_ROLE_ID;
+
+    if (!moonlightRoleId || !sunshineRoleId) {
+      return interaction.editReply({ embeds: [errorEmbed('REGIMENT_ROLE_ID or SUNSHINE_ROLE_ID is missing in .env')] });
+    }
+
+    try {
+      // 1. Fetch all members from Discord
+      const allMembers = await interaction.guild.members.fetch();
+      
+      // 2. Separate by role
+      const discordMoonlight = allMembers.filter(m => !m.user.bot && m.roles.cache.has(moonlightRoleId));
+      const discordSunshine = allMembers.filter(m => !m.user.bot && m.roles.cache.has(sunshineRoleId));
+
+      // 3. Fetch from DB
+      const dbMoonlight = await getAllMembers('moonlight');
+      const dbSunshine = await getAllMembers('sunshine');
+
+      let mlAdded = 0, mlRemoved = 0;
+      let sunAdded = 0, sunRemoved = 0;
+
+      // --- MOONLIGHT SYNC ---
+      // Add missing to DB
+      for (const [id, member] of discordMoonlight) {
+        if (!dbMoonlight.find(m => m.userId === id)) {
+          await addMember(id, member.user.tag, 'moonlight');
+          mlAdded++;
+        }
+      }
+      // Remove extraneous from DB
+      for (const dbUser of dbMoonlight) {
+        if (!discordMoonlight.has(dbUser.userId)) {
+          await removeMember(dbUser.userId, 'moonlight');
+          mlRemoved++;
+        }
+      }
+      await syncRegimentCount('moonlight');
+
+      // --- SUNSHINE SYNC ---
+      // Add missing to DB
+      for (const [id, member] of discordSunshine) {
+        if (!dbSunshine.find(m => m.userId === id)) {
+          await addMember(id, member.user.tag, 'sunshine');
+          sunAdded++;
+        }
+      }
+      // Remove extraneous from DB
+      for (const dbUser of dbSunshine) {
+        if (!discordSunshine.has(dbUser.userId)) {
+          await removeMember(dbUser.userId, 'sunshine');
+          sunRemoved++;
+        }
+      }
+      await syncRegimentCount('sunshine');
+
+      const embed = new EmbedBuilder()
+        .setColor(0x57f287)
+        .setTitle('✅ Database Sync Complete')
+        .setDescription('The website databases have been perfectly synchronized with current Discord roles.')
+        .addFields(
+          { name: 'Moonlight Soldiers', value: `➕ Added: ${mlAdded}\\n➖ Removed: ${mlRemoved}`, inline: true },
+          { name: 'Sunshine Soldiers', value: `➕ Added: ${sunAdded}\\n➖ Removed: ${sunRemoved}`, inline: true }
+        )
+        .setTimestamp();
+
+      await interaction.editReply({ embeds: [embed] });
+
+    } catch (err) {
+      await interaction.editReply({ embeds: [errorEmbed(`Failed to sync data: ${err.message}`)] });
+    }
+  },
+};
+
 module.exports = [
   queueCommand,
   myPositionCommand,
@@ -893,4 +979,5 @@ module.exports = [
   transferSunBannerCommand,
   fixRoleCommand,
   giveChannelAccessCommand,
+  syncDataCommand,
 ];
