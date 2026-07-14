@@ -27,19 +27,16 @@ function startWebServer(client) {
 
   const app = express();
 
+  const cors = require('cors');
+  // CORS — lets the Vercel-hosted frontend call this API.
+  app.use(cors({
+    origin: process.env.DASHBOARD_ORIGIN || '*',
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-regiment']
+  }));
+
   // ── Body size limit (prevent oversized payloads) ──
   app.use(express.json({ limit: '50kb' }));
-
-  // CORS — lets the Vercel-hosted frontend call this API. Auth is via Bearer
-  // password (not cookies), so a wildcard origin is safe. Lock it down with
-  // DASHBOARD_ORIGIN=https://your-site.vercel.app if you prefer.
-  app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', process.env.DASHBOARD_ORIGIN || '*');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-regiment');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-    if (req.method === 'OPTIONS') return res.sendStatus(204);
-    next();
-  });
 
   // ── HTTP rate limiting (per IP) ──
   const apiReadLimiter  = new RateLimiter(30, 60_000); // 30 reads per minute
@@ -910,6 +907,12 @@ load();
     if (req.method !== 'GET') return next();
     if (req.path.startsWith('/api') || req.path.startsWith('/auth')) return next();
     res.sendFile(path.join(rootDir, 'dashboard', 'dist', 'index.html'));
+  });
+
+  // Global Error Handler
+  app.use((err, req, res, next) => {
+    console.error('[web] Error Handler:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
   });
 
   app.listen(port, () => {

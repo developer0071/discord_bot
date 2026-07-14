@@ -64,6 +64,13 @@ async function rtdPush(path, data) {
   return ref.key;
 }
 
+// ─── Cache to prevent Quota Exhaustion ────────────────────────────────────────
+const _cache = {
+  users: { data: null, lastFetch: 0 },
+  members: { data: null, lastFetch: 0 },
+  queue: { data: null, lastFetch: 0 },
+};
+
 // ─── Regiment ────────────────────────────────────────────────────────────────
 
 async function getRegimentStatus(regiment = 'moonlight') {
@@ -146,14 +153,20 @@ async function addToQueue(userId, username, regiment = 'moonlight') {
     notified: false,
     votes: 0,
   });
+  _cache.queue.data = null; // Invalidate queue cache
   return { alreadyQueued: false, position };
 }
 
 async function removeFromQueue(userId, regiment = 'moonlight') {
   await firestoreDb.collection('queue').doc(userId).delete();
+  _cache.queue.data = null; // Invalidate queue cache
 }
 
 async function getFullQueue(regiment = 'moonlight') {
+  const now = Date.now();
+  if (regiment === 'moonlight' && _cache.queue.data && now - _cache.queue.lastFetch < 60000) {
+    return _cache.queue.data;
+  }
   const snapshot = await firestoreDb.collection('queue').get();
   const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   docs.sort((a, b) => {
@@ -164,7 +177,12 @@ async function getFullQueue(regiment = 'moonlight') {
     const bTime = b.joinedAt?.toMillis?.() || 0;
     return aTime - bTime;
   });
-  return docs.map((doc, i) => ({ position: i + 1, ...doc }));
+  const finalDocs = docs.map((doc, i) => ({ position: i + 1, ...doc }));
+  if (regiment === 'moonlight') {
+    _cache.queue.data = finalDocs;
+    _cache.queue.lastFetch = now;
+  }
+  return finalDocs;
 }
 
 async function getNextInQueue(regiment = 'moonlight') {
@@ -203,6 +221,7 @@ async function castQueueVote(voterId, targetUserId, regiment = 'moonlight') {
     votes: admin.firestore.FieldValue.increment(1),
   });
   await batch.commit();
+  _cache.queue.data = null; // Invalidate queue cache
   return { success: true };
 }
 
@@ -221,6 +240,7 @@ async function addMember(userId, username, regiment = 'moonlight') {
     joinedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
   await updateRegimentCount(1, 'moonlight');
+  _cache.members.data = null; // Invalidate cache
 }
 
 async function removeMember(userId, regiment = 'moonlight') {
@@ -236,6 +256,7 @@ async function removeMember(userId, regiment = 'moonlight') {
   if (doc.exists) {
     await firestoreDb.collection('members').doc(userId).delete();
     await updateRegimentCount(-1, 'moonlight');
+    _cache.members.data = null; // Invalidate cache
   }
 }
 
@@ -254,8 +275,16 @@ async function getAllMembers(regiment = 'moonlight') {
     if (!snap.exists()) return [];
     return Object.values(snap.val());
   }
+  
+  const now = Date.now();
+  if (_cache.members.data && now - _cache.members.lastFetch < 60000) {
+    return _cache.members.data;
+  }
+  
   const snapshot = await firestoreDb.collection('members').orderBy('joinedAt').get();
-  return snapshot.docs.map(doc => doc.data());
+  _cache.members.data = snapshot.docs.map(doc => doc.data());
+  _cache.members.lastFetch = now;
+  return _cache.members.data;
 }
 
 // ─── User Profiles ───────────────────────────────────────────────────────────
@@ -263,6 +292,14 @@ async function getAllMembers(regiment = 'moonlight') {
 
 async function saveUserProfile(userId, data) {
   await firestoreDb.collection('users').doc(userId).set(data, { merge: true });
+  if (_cache.users.data) {
+    const existing = _cache.users.data.find(u => (u.discordId || u.userId) === userId);
+    if (existing) {
+      Object.assign(existing, data);
+    } else {
+      _cache.users.data.push({ userId, ...data });
+    }
+  }
 }
 
 async function getUserProfile(userId) {
@@ -271,8 +308,14 @@ async function getUserProfile(userId) {
 }
 
 async function getAllUsers() {
+  const now = Date.now();
+  if (_cache.users.data && now - _cache.users.lastFetch < 3600000) { // 1 hour cache
+    return _cache.users.data;
+  }
   const snapshot = await firestoreDb.collection('users').get();
-  return snapshot.docs.map(doc => doc.data());
+  _cache.users.data = snapshot.docs.map(doc => doc.data());
+  _cache.users.lastFetch = now;
+  return _cache.users.data;
 }
 
 // ─── Audit Logs ──────────────────────────────────────────────────────────────
