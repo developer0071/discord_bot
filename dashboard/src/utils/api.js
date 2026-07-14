@@ -213,3 +213,17 @@ export async function apiSyncMembers() {
 export async function apiSaveSettings(settings) {
   return apiFetch('POST', '/api/settings', settings);
 }
+
+// ── Private Servers ──
+export async function fetchPrivateServers() {
+  const data = await apiFetch('GET', '/api/private-servers');
+  return data.servers || [];
+}
+
+export async function addPrivateServer(link) {
+  return apiFetch('POST', '/api/private-servers', { link });
+}
+
+export async function deletePrivateServer(id) {
+  return apiFetch('DELETE', '/api/private-servers/' + id);
+}

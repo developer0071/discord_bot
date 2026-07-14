@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { key: 'queue',     path: '/queue',     icon: 'fa-clock-rotate-left',  label: 'Join Queue',    section: 'Management', badgeKey: 'queueCount' },
   { key: 'feedback',  path: '/feedback',  icon: 'fa-message',            label: 'Feedback',      section: 'Management' },
   { key: 'giveaways', path: '/giveaways', icon: 'fa-gift',               label: 'Giveaways',     section: 'Management', badgeKey: 'giveawayCount' },
+  { key: 'private-servers', path: '/private-servers', icon: 'fa-server', label: 'Private Servers', section: 'Management', badgeKey: 'privateServersCount' },
   { key: 'chat',      path: '/chat',      icon: 'fa-comments',           label: 'Live Chat',     section: 'Management' },
   { key: 'leveling',  path: '/leveling',  icon: 'fa-bolt',               label: 'Leveling',      section: 'Management' },
   { key: 'logs',      path: '/audit',     icon: 'fa-scroll',             label: 'Audit Log',     section: 'System' },
@@ -16,13 +17,14 @@ const NAV_ITEMS = [
 const READONLY_TABS = new Set(['members', 'queue', 'chat', 'leveling']);
 
 export default function Sidebar({ isOpen, onClose }) {
-  const { members, queue, giveaways, isMod, me } = useApp();
+  const { members, queue, giveaways, privateServers, isMod, me } = useApp();
   const regiment = getRegiment();
 
   const badgeValues = {
     memberCount: members.filter(m => m.status !== 'kicked').length,
     queueCount: queue.length,
     giveawayCount: giveaways.filter(g => g.status === 'active' || g.status === 'scheduled').length,
+    privateServersCount: privateServers ? privateServers.length : 0,
   };
 
   let lastSection = '';

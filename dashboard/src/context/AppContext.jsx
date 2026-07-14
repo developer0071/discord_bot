@@ -5,6 +5,7 @@ import {
   apiKickMember, apiAcceptQueue, apiRejectQueue, apiAddMember, apiUpdateMember, apiBulkUpdateStatus, apiReinstateM,
   apiSaveSettings, apiSyncMembers, createGiveaway, endGiveaway as apiEndGw, rerollGiveaway as apiRerollGw,
   deleteGiveaway as apiDeleteGw, fetchGiveawayDetail, getApiBase,
+  fetchPrivateServers, addPrivateServer as apiAddPs, deletePrivateServer as apiDeletePs,
 } from '../utils/api';
 
 const AppContext = createContext(null);
@@ -28,6 +29,7 @@ export function AppProvider({ children }) {
   const [channels, setChannels] = useState([]);
   const [settings, setSettings] = useState({});
   const [regimentStatus, setRegimentStatus] = useState({});
+  const [privateServers, setPrivateServers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // ── Active tab ──
@@ -104,6 +106,17 @@ export function AppProvider({ children }) {
       return list;
     } catch (e) {
       showToast('Failed to load giveaways: ' + e.message, 'error');
+      throw e;
+    }
+  }, [showToast]);
+
+  const loadPrivateServers = useCallback(async () => {
+    try {
+      const list = await fetchPrivateServers();
+      setPrivateServers(list);
+      return list;
+    } catch (e) {
+      showToast('Failed to load private servers: ' + e.message, 'error');
       throw e;
     }
   }, [showToast]);
@@ -277,6 +290,23 @@ export function AppProvider({ children }) {
     await loadGiveaways().catch(() => {});
   }, [showToast, loadGiveaways]);
 
+  // ── Private Servers ──
+  const submitPrivateServer = useCallback(async (link) => {
+    try {
+      await apiAddPs(link);
+      showToast('Private server added!', 'success');
+    } catch (e) { showToast('Add failed: ' + e.message, 'error'); throw e; }
+    await loadPrivateServers().catch(() => {});
+  }, [showToast, loadPrivateServers]);
+
+  const removePrivateServer = useCallback(async (id) => {
+    try {
+      await apiDeletePs(id);
+      showToast('Private server deleted', 'warning');
+    } catch (e) { showToast('Delete failed: ' + e.message, 'error'); }
+    await loadPrivateServers().catch(() => {});
+  }, [showToast, loadPrivateServers]);
+
   const value = {
     // Auth
     authenticated, authError, login, logout, loading, userTier, isMod,
@@ -296,6 +326,8 @@ export function AppProvider({ children }) {
     saveSettings,
     // Giveaways
     submitGiveaway, endGiveaway, rerollGiveaway, removeGiveaway,
+    // Private Servers
+    privateServers, loadPrivateServers, submitPrivateServer, removePrivateServer,
     // API helpers
     getApiBase,
     fetchGiveawayDetail,

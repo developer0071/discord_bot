@@ -3,6 +3,7 @@ import Layout from './components/Layout';
 import Members from './pages/Members';
 import Queue from './pages/Queue';
 import Giveaways from './pages/Giveaways';
+import PrivateServers from './pages/PrivateServers';
 import AuditLog from './pages/AuditLog';
 import Chat from './pages/Chat';
 import Leveling from './pages/Leveling';
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="/members" element={<Members />} />
           <Route path="/queue" element={<Queue />} />
           <Route path="/giveaways" element={<Giveaways />} />
+          <Route path="/private-servers" element={<PrivateServers />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/leveling" element={<Leveling />} />
           <Route path="/audit" element={<AuditLog />} />
