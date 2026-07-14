@@ -21,7 +21,7 @@ export function AppProvider({ children }) {
   // ── Data ──
   const [me, setMe] = useState(null);
   const [members, setMembers] = useState([]);
-  const [leveling, setLeveling] = useState([]);
+
   const [queue, setQueue] = useState([]);
   const [logs, setLogs] = useState([]);
   const [feedback, setFeedback] = useState([]);
@@ -79,7 +79,7 @@ export function AppProvider({ children }) {
       if (data.tier) setUserTier(data.tier === 'readonly' ? 'readonly' : 'mod');
       if (data.me) setMe(data.me);
       setMembers(data.members);
-      setLeveling(data.leveling || []);
+
       setQueue(data.queue);
       setLogs(data.logs || []);
       setFeedback(data.feedback || []);
@@ -311,7 +311,7 @@ export function AppProvider({ children }) {
     // Auth
     authenticated, authError, login, logout, loading, userTier, isMod,
     // Data
-    me, members, leveling, queue, logs, feedback, giveaways, channels, settings, regimentStatus,
+    me, members, queue, logs, feedback, giveaways, channels, settings, regimentStatus,
     // Data loading
     loadData, loadGiveaways, loadChannels,
     // Tab & Search

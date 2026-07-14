@@ -6,7 +6,7 @@ import Giveaways from './pages/Giveaways';
 import PrivateServers from './pages/PrivateServers';
 import AuditLog from './pages/AuditLog';
 import Chat from './pages/Chat';
-import Leveling from './pages/Leveling';
+
 import Settings from './pages/Settings';
 import Feedback from './pages/Feedback';
 import LoginOverlay from './components/LoginOverlay';
@@ -43,7 +43,7 @@ export default function App() {
           <Route path="/giveaways" element={<Giveaways />} />
           <Route path="/private-servers" element={<PrivateServers />} />
           <Route path="/chat" element={<Chat />} />
-          <Route path="/leveling" element={<Leveling />} />
+
           <Route path="/audit" element={<AuditLog />} />
           <Route path="/feedback" element={<Feedback />} />
           <Route path="/settings" element={isMod ? <Settings /> : <Navigate to="/members" replace />} />

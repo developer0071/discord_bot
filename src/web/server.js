@@ -874,7 +874,13 @@ load();
   app.get('/api/private-servers', rlRead, async (req, res) => {
     try {
       const servers = await fb.getPrivateServers();
-      res.json({ servers: servers.map(s => ({ id: s.id, userId: s.userId, tag: s.tag, link: s.link, addedAt: s.addedAt ? s.addedAt.toMillis() : Date.now() })) });
+      res.json({ servers: servers.map(s => ({ 
+        id: s.id, 
+        userId: s.userId, 
+        tag: s.tag, 
+        link: s.link, 
+        addedAt: s.addedAt ? (typeof s.addedAt.toMillis === 'function' ? s.addedAt.toMillis() : (new Date(s.addedAt).getTime() || Date.now())) : Date.now() 
+      })) });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 

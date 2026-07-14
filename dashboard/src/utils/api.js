@@ -141,9 +141,9 @@ export async function fetchDashboardData() {
 
   const settings = data.settings || {};
   const status = data.status || {};
-  const leveling = data.leveling || [];
 
-  return { members, queue, logs, feedback, settings, status, leveling, tier: data.tier || 'mod' };
+
+  return { members, queue, logs, feedback, settings, status, tier: data.tier || 'mod' };
 }
 
 // ── Giveaways ──
