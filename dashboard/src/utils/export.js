@@ -4,6 +4,7 @@ import { formatDate, getAvatarColor, getInitials } from './helpers';
 export function exportCSV(members) {
   const esc = (v) => '"' + String(v || '').replace(/"/g, '""') + '"';
   let csv = '\uFEFF'; // UTF-8 BOM for Excel
+  csv += 'sep=,\r\n'; // Force Excel to recognize comma as delimiter
   csv += [esc('Discord'), esc('Roblox'), esc('Status'), esc('Joined'), esc('Feedback'), esc('Notes')].join(',') + '\r\n';
   members.forEach(m => {
     csv += [esc(m.discord), esc(m.roblox), esc(m.status), esc(formatDate(m.joined)), esc(m.feedback), esc(m.notes)].join(',') + '\r\n';
