@@ -5,60 +5,69 @@ const ValueItem = require('../models/ValueItem');
 const SystemState = require('../models/SystemState');
 
 async function syncValues(client) {
-  const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR7naBmry1w8WlHFrtpxJ0n3XdgDj5cehW6XxTdJVDPMDivrnOefz83uuFCoYEGd028tjFQ6tcfPyBA/pub?gid=1606480838&single=true&output=csv";
-  
-  try {
-    const response = await axios.get(url);
-    const records = parse(response.data, { columns: true, skip_empty_lines: true });
+  // GIDs for different tabs in the Google Sheet
+  const gids = [
+    '1606480838', // ALL Cosmetics
+    '1985243848', // Family
+    '1207135228'  // Raid & Mission Drops
+  ];
 
+  try {
     const itemsToSave = [];
     const fullListText = {
-      Legendary: [],
-      Epic: [],
-      Rare: [],
-      Uncommon: [],
-      Common: []
+      Legendary: [], Epic: [], Rare: [], Uncommon: [], Common: []
     };
 
-    for (const row of records) {
-      if (!row.Rarity) continue; // skip headers
-      
-      const itemName = row['Item Name'];
-      const rarity = row['Rarity'];
-      
-      itemsToSave.push({
-        updateOne: {
-          filter: { itemName: itemName },
-          update: {
-            $set: {
-              itemName: itemName,
-              rarity: rarity,
-              demand: row['Demand'] || 'N/A',
-              value: row['Value'] || 'N/A',
-              rateOfChange: row['Rate Of Change'] || 'N/A',
-              taxGems: row['Tax (Gems)'] || 'N/A',
-              taxGold: row['Tax (Gold)'] || 'N/A',
-              lastUpdated: new Date()
-            }
-          },
-          upsert: true
-        }
-      });
+    for (const gid of gids) {
+      const url = `https://docs.google.com/spreadsheets/d/e/2PACX-1vR7naBmry1w8WlHFrtpxJ0n3XdgDj5cehW6XxTdJVDPMDivrnOefz83uuFCoYEGd028tjFQ6tcfPyBA/pub?gid=${gid}&single=true&output=csv`;
+      const response = await axios.get(url);
+      const records = parse(response.data, { columns: true, skip_empty_lines: true });
 
-      // Organize for the panel
-      if (fullListText[rarity]) {
-        let entry = `**${itemName}** - ${row['Value'] || 'N/A'}`;
-        if (row['Rate Of Change']) {
-          if (row['Rate Of Change'].toLowerCase() === 'rising') entry += ' 📈';
-          else if (row['Rate Of Change'].toLowerCase() === 'dropping') entry += ' 📉';
+      for (const row of records) {
+        if (!row.Rarity) continue; // skip headers
+        
+        const itemName = row['Item Name'];
+        // Wait, some tabs might use 'Family' as the header instead of 'Item Name' if it's the first column
+        // But the parse({columns: true}) uses the first row. The first row in Family is 'Item Name'.
+        // So row['Item Name'] should work perfectly!
+        if (!itemName) continue;
+
+        const rarity = row['Rarity'];
+        
+        itemsToSave.push({
+          updateOne: {
+            filter: { itemName: itemName },
+            update: {
+              $set: {
+                itemName: itemName,
+                rarity: rarity,
+                demand: row['Demand'] || 'N/A',
+                value: row['Value'] || 'N/A',
+                rateOfChange: row['Rate Of Change'] || 'N/A',
+                taxGems: row['Tax (Gems)'] || 'N/A',
+                taxGold: row['Tax (Gold)'] || 'N/A',
+                lastUpdated: new Date()
+              }
+            },
+            upsert: true
+          }
+        });
+
+        // Organize for the panel
+        if (fullListText[rarity]) {
+          let entry = `**${itemName}** - ${row['Value'] || 'N/A'}`;
+          if (row['Rate Of Change']) {
+            if (row['Rate Of Change'].toLowerCase() === 'rising') entry += ' 📈';
+            else if (row['Rate Of Change'].toLowerCase() === 'dropping') entry += ' 📉';
+          }
+          fullListText[rarity].push(entry);
         }
-        fullListText[rarity].push(entry);
       }
     }
 
     if (itemsToSave.length > 0) {
       await ValueItem.bulkWrite(itemsToSave);
-      console.log(`✅ Synced ${itemsToSave.length} AOT:R values to MongoDB.`);
+      console.log(`✅ Synced ${itemsToSave.length} AOT:R values to MongoDB across multiple tabs.`);
     }
 
     // Update Live Panel (Removed per user request)
