@@ -18,7 +18,9 @@ const verification      = require('./events/verification');
 const { startWebServer } = require('./web/server');
 const { startGiveawayScheduler } = require('./utils/giveaway');
 const { initQueueVotingListener } = require('./events/queueVoting');
+const { startSyncLoop } = require('./utils/valueSync');
 const commands          = require('./commands/index');
+require('../mongodb');
 // ─── Client Setup ─────────────────────────────────────────────────────────────
 const client = new Client({
   intents: [
@@ -44,7 +46,7 @@ client.once('clientReady', async () => {
   startWebServer(client);
   startGiveawayScheduler(client);
   initQueueVotingListener(client);
-
+  startSyncLoop(client);
 });
 
 client.on('guildMemberAdd',    member => guildMemberAdd.execute(member));

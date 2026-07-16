@@ -8,6 +8,10 @@ const {
   EmbedBuilder,
   ChannelType,
 } = require('discord.js');
+const axios = require('axios');
+const { parse } = require('csv-parse/sync');
+const ValueItem = require('../models/ValueItem');
+const { calculateSide, formatNumber } = require('../utils/tradeParser');
 const {
   getRegimentStatus,
   getFullQueue,
@@ -959,7 +963,181 @@ const syncDataCommand = {
   },
 };
 
+// ─── /value — AOT:R Trade Values ──────────────────────────────────────────────
+function multiplyValueString(str, amount) {
+  if (!str || str === 'N/A' || str.toLowerCase() === 'stable' || str.toLowerCase() === 'rising' || str.toLowerCase() === 'dropping') return str;
+  if (amount <= 1) return str;
+  
+  return str.replace(/[\d,.]+/g, (match) => {
+    let cleanNum = match.replace(/,/g, '');
+    let num = parseFloat(cleanNum);
+    if (isNaN(num)) return match;
+    
+    let result = num * amount;
+    if (result >= 1000 && !result.toString().includes('.')) {
+      return result.toLocaleString('en-US');
+    }
+    return Number(result.toFixed(2)).toString();
+  });
+}
+
+const valueCommand = {
+  data: new SlashCommandBuilder()
+    .setName('value')
+    .setDescription('Get the trade value of an AOT:R item')
+    .addStringOption(opt =>
+      opt.setName('item')
+        .setDescription('The name of the item to search for')
+        .setRequired(true)
+    )
+    .addIntegerOption(opt =>
+      opt.setName('amount')
+        .setDescription('Multiplier for the values (e.g., 3 to see value of 3x items)')
+        .setRequired(false)
+        .setMinValue(1)
+        .setMaxValue(100)
+    ),
+
+  async execute(interaction) {
+    await interaction.deferReply(); // Public reply
+
+    const searchTerm = interaction.options.getString('item').toLowerCase();
+    const amount = interaction.options.getInteger('amount') || 1;
+    
+    try {
+      // Find the item in MongoDB using a case-insensitive regex
+      const itemData = await ValueItem.findOne({ 
+        itemName: { $regex: searchTerm, $options: 'i' } 
+      });
+
+      if (!itemData) {
+        return interaction.editReply({ 
+          embeds: [errorEmbed(`Could not find an item matching **${interaction.options.getString('item')}**.`)] 
+        });
+      }
+
+      // Determine embed color based on rarity
+      let embedColor = 0x2b2d31; // Default
+      const rarity = itemData.rarity.toLowerCase();
+      let rarityEmoji = '🔸';
+      
+      if (rarity === 'legendary') { embedColor = 0xf1c40f; rarityEmoji = '🟡'; }
+      else if (rarity === 'epic') { embedColor = 0x9b59b6; rarityEmoji = '🟣'; }
+      else if (rarity === 'rare') { embedColor = 0x3498db; rarityEmoji = '🔵'; }
+      else if (rarity === 'uncommon') { embedColor = 0x2ecc71; rarityEmoji = '🟢'; }
+      else if (rarity === 'common') { embedColor = 0x95a5a6; rarityEmoji = '⚪'; }
+
+      const title = amount > 1 
+        ? `Trade Value: ${amount}x ${itemData.itemName}` 
+        : `Trade Value: ${itemData.itemName}`;
+
+      const embed = new EmbedBuilder()
+        .setColor(embedColor)
+        .setTitle(`📊 ${title}`)
+        .setDescription(`Current market values based on official data.`)
+        .addFields(
+          { name: '🌟 Rarity', value: `${rarityEmoji} ${itemData.rarity}`, inline: true },
+          { name: '🔥 Demand', value: multiplyValueString(itemData.demand, amount) || 'N/A', inline: true },
+          { name: '📈 Rate Of Change', value: itemData.rateOfChange || 'N/A', inline: true },
+          { name: '💰 Value', value: multiplyValueString(itemData.value, amount) || 'N/A', inline: false },
+          { name: '💎 Tax (Gems)', value: multiplyValueString(itemData.taxGems, amount) || 'N/A', inline: true },
+          { name: '🪙 Tax (Gold)', value: multiplyValueString(itemData.taxGold, amount) || 'N/A', inline: true }
+        )
+        .setThumbnail('https://i.imgur.com/eB9B1Zg.png') // Cool placeholder/default icon
+        .setFooter({ text: 'Data sourced from AOT:R Value List', iconURL: interaction.client.user.displayAvatarURL() })
+        .setTimestamp(itemData.lastUpdated);
+
+      await interaction.editReply({ embeds: [embed] });
+
+    } catch (err) {
+      console.error(err);
+      await interaction.editReply({ 
+        embeds: [errorEmbed('Failed to fetch data from the database. Please try again later.')] 
+      });
+    }
+  },
+};
+
+// ─── /tradecalc — AOT:R Trade Calculator ───────────────────────────────────────
+const tradeCalcCommand = {
+  data: new SlashCommandBuilder()
+    .setName('tradecalc')
+    .setDescription('Calculate and compare trade values')
+    .addStringOption(opt =>
+      opt.setName('offer')
+        .setDescription('Your offer (e.g. 2x colossal serum, 1x fritz)')
+        .setRequired(true)
+    )
+    .addStringOption(opt =>
+      opt.setName('request')
+        .setDescription('What you want (e.g. 1x black flash aura)')
+        .setRequired(true)
+    ),
+
+  async execute(interaction) {
+    await interaction.deferReply();
+
+    const offerStr = interaction.options.getString('offer');
+    const requestStr = interaction.options.getString('request');
+
+    try {
+      const offerSide = await calculateSide(offerStr);
+      const requestSide = await calculateSide(requestStr);
+
+      if (offerSide.errors.length > 0 || requestSide.errors.length > 0) {
+        const allErrors = [...offerSide.errors, ...requestSide.errors].join('\\n');
+        return interaction.editReply({ embeds: [errorEmbed(`**Errors found:**\\n${allErrors}`)] });
+      }
+
+      const offerTotal = offerSide.totalKeys;
+      const requestTotal = requestSide.totalKeys;
+
+      let verdict = '';
+      let color = 0x2b2d31;
+      let diff = requestTotal - offerTotal; 
+      
+      const margin = Math.max(offerTotal, requestTotal) * 0.05;
+
+      if (Math.abs(diff) <= margin) {
+        verdict = '⚖️ FAIR TRADE';
+        color = 0xf1c40f; // Yellow
+      } else if (diff > 0) {
+        verdict = '🎉 WIN (Profit)';
+        color = 0x2ecc71; // Green
+      } else {
+        verdict = '💀 LOSS (Overpay)';
+        color = 0xe74c3c; // Red
+      }
+
+      const formatItemList = (items) => {
+        return items.map(i => `${i.amount}x **${i.name}** (🔑 ${formatNumber(i.keys)})`).join('\\n') || 'None';
+      };
+
+      const embed = new EmbedBuilder()
+        .setColor(color)
+        .setTitle('⚖️ Trade Calculator')
+        .addFields(
+          { name: '📤 Your Offer', value: formatItemList(offerSide.items) + `\\n\\n**Total Value:** 🔑 ${formatNumber(offerTotal)}`, inline: true },
+          { name: '📥 Their Offer', value: formatItemList(requestSide.items) + `\\n\\n**Total Value:** 🔑 ${formatNumber(requestTotal)}`, inline: true },
+          { name: '\\u200B', value: '\\u200B', inline: false }, // Spacer
+          { name: '📊 Verdict', value: `**${verdict}**\\nDifference: 🔑 ${formatNumber(Math.abs(diff))}`, inline: true },
+          { name: '💎 Total Taxes', value: `You pay: 💎 ${formatNumber(offerSide.totalGems)} | 🪙 ${formatNumber(offerSide.totalGold)}\\nThey pay: 💎 ${formatNumber(requestSide.totalGems)} | 🪙 ${formatNumber(requestSide.totalGold)}`, inline: true }
+        )
+        .setFooter({ text: 'Calculated in Keys 🔑', iconURL: interaction.client.user.displayAvatarURL() })
+        .setTimestamp();
+
+      await interaction.editReply({ embeds: [embed] });
+
+    } catch (err) {
+      console.error(err);
+      await interaction.editReply({ embeds: [errorEmbed('An error occurred while calculating the trade.')] });
+    }
+  }
+};
+
 module.exports = [
+  valueCommand,
+  tradeCalcCommand,
   queueCommand,
   myPositionCommand,
   promoteCommand,

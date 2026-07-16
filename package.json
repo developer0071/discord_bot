@@ -11,11 +11,13 @@
   "dependencies": {
     "axios": "^1.18.1",
     "cors": "^2.8.6",
+    "csv-parse": "^7.0.1",
     "discord.js": "^14.15.3",
-    "dotenv": "^16.4.5",
+    "dotenv": "^16.6.1",
     "express": "^5.2.1",
-    "firebase-admin": "^12.3.0",
+    "firebase-admin": "^14.1.0",
     "https-proxy-agent": "^9.1.0",
+    "mongoose": "^9.7.4",
     "multer": "^2.2.0"
   }
 }
