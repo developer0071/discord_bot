@@ -1108,7 +1108,8 @@ const valueCommand = {
   },
 
   async execute(interaction) {
-    if (interaction.channel && interaction.channel.name !== 'value-list') {
+    const valueListChannelId = process.env.VALUE_LIST_CHANNEL;
+    if (valueListChannelId && interaction.channel && interaction.channel.id !== valueListChannelId) {
       return interaction.reply({
         embeds: [errorEmbed('This command can only be used in the **#value-list** channel.')],
         flags: MessageFlags.Ephemeral
@@ -1279,7 +1280,8 @@ const tradeCalcCommand = {
   },
 
   async execute(interaction) {
-    if (interaction.channel && interaction.channel.name !== 'value-list') {
+    const valueListChannelId = process.env.VALUE_LIST_CHANNEL;
+    if (valueListChannelId && interaction.channel && interaction.channel.id !== valueListChannelId) {
       return interaction.reply({
         embeds: [errorEmbed('This command can only be used in the **#value-list** channel.')],
         flags: MessageFlags.Ephemeral
