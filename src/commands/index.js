@@ -11,7 +11,7 @@ const {
 const axios = require('axios');
 const { parse } = require('csv-parse/sync');
 const ValueItem = require('../models/ValueItem');
-const { calculateSide, formatNumber, fuzzyMatch } = require('../utils/tradeParser');
+const { calculateSide, formatNumber, fuzzyMatch, parseNumericalValue } = require('../utils/tradeParser');
 const {
   getRegimentStatus,
   getFullQueue,
@@ -1058,16 +1058,59 @@ const valueCommand = {
       const embed = new EmbedBuilder()
         .setColor(embedColor)
         .setTitle(`📊 ${title}`)
-        .setDescription(`Current market values based on official data.`)
+        .setDescription(`*Current market values based on official data.*\n\u200B`)
         .addFields(
-          { name: '🌟 Rarity', value: `${rarityEmoji} ${itemData.rarity}`, inline: true },
-          { name: '🔥 Demand', value: multiplyValueString(itemData.demand, amount) || 'N/A', inline: true },
-          { name: '📈 Rate Of Change', value: itemData.rateOfChange || 'N/A', inline: true },
-          { name: '💰 Value', value: multiplyValueString(itemData.value, amount) || 'N/A', inline: false },
-          { name: '💎 Tax (Gems)', value: multiplyValueString(itemData.taxGems, amount) || 'N/A', inline: true },
-          { name: '🪙 Tax (Gold)', value: multiplyValueString(itemData.taxGold, amount) || 'N/A', inline: true }
+          { name: '🌟 Rarity', value: `> ${rarityEmoji} **${itemData.rarity}**\n\u200B`, inline: true },
+          { name: '🔥 Demand', value: `> **${multiplyValueString(itemData.demand, amount) || 'N/A'}**\n\u200B`, inline: true },
+          { name: '📈 Trend', value: `> **${itemData.rateOfChange || 'N/A'}**\n\u200B`, inline: true },
+          { name: '💰 Trade Value', value: `> 🔑 **${multiplyValueString(itemData.value, amount) || 'N/A'}**\n\u200B`, inline: false },
+          { name: '💎 Tax (Gems)', value: `> **${multiplyValueString(itemData.taxGems, amount) || 'N/A'}**`, inline: true },
+          { name: '🪙 Tax (Gold)', value: `> **${multiplyValueString(itemData.taxGold, amount) || 'N/A'}**`, inline: true }
         )
-        .setFooter({ text: 'Data sourced from AOT:R Value List', iconURL: interaction.client.user.displayAvatarURL() })
+        
+      const baseValue = parseNumericalValue(itemData.value) * amount;
+      if (baseValue > 0) {
+        // Find recommendations
+        const similarItems = [];
+        const upgradeItems = [];
+        
+        for (const item of allItems) {
+          if (item.itemName === itemData.itemName) continue;
+          
+          const itemVal = parseNumericalValue(item.value);
+          if (itemVal <= 0) continue;
+          
+          // Similar value (± 10%)
+          if (itemVal >= baseValue * 0.9 && itemVal <= baseValue * 1.1) {
+            similarItems.push(item);
+          } 
+          // Upgrade value (+ 10% to + 40%)
+          else if (itemVal > baseValue * 1.1 && itemVal <= baseValue * 1.4) {
+            upgradeItems.push(item);
+          }
+        }
+        
+        // Shuffle helper
+        const shuffle = (array) => array.sort(() => 0.5 - Math.random());
+        
+        const selectedSimilar = shuffle(similarItems).slice(0, 2);
+        const selectedUpgrade = shuffle(upgradeItems).slice(0, 1);
+        
+        let recText = '';
+        if (selectedSimilar.length > 0) {
+          recText += `**🔄 Even Trades:**\n${selectedSimilar.map(i => `> ${i.itemName} *(🔑 ${i.value})*`).join('\n')}\n`;
+        }
+        if (selectedUpgrade.length > 0) {
+          recText += `**📈 Upgrade Goals:**\n${selectedUpgrade.map(i => `> ${i.itemName} *(🔑 ${i.value})*`).join('\n')}\n`;
+        }
+        
+        if (recText) {
+          embed.addFields({ name: '\u200B', value: '\u200B', inline: false }); // Spacer
+          embed.addFields({ name: '💡 Trade Recommendations', value: recText, inline: false });
+        }
+      }
+
+      embed.setFooter({ text: 'Data sourced from AOT:R Value List', iconURL: interaction.client.user.displayAvatarURL() })
         .setTimestamp(itemData.lastUpdated);
 
       await interaction.editReply({ embeds: [embed] });
@@ -1177,18 +1220,19 @@ const tradeCalcCommand = {
       }
 
       const formatItemList = (items) => {
-        return items.map(i => `${i.amount}x **${i.name}** (🔑 ${formatNumber(i.keys)})`).join('\n') || 'None';
+        return items.map(i => `> ${i.amount}x **${i.name}**\n> *🔑 ${formatNumber(i.keys)}*`).join('\n\n') || '> None';
       };
 
       const embed = new EmbedBuilder()
         .setColor(color)
-        .setTitle('⚖️ Trade Calculator')
+        .setTitle('⚖️ Trade Calculator Analysis')
+        .setDescription(`*Compare your offer against their offer to determine trade fairness.*\n\u200B`)
         .addFields(
-          { name: '📤 Your Offer', value: formatItemList(offerSide.items) + `\n\n**Total Value:** 🔑 ${formatNumber(offerTotal)}`, inline: true },
-          { name: '📥 Their Offer', value: formatItemList(requestSide.items) + `\n\n**Total Value:** 🔑 ${formatNumber(requestTotal)}`, inline: true },
+          { name: '📤 Your Offer', value: `${formatItemList(offerSide.items)}\n\n**Total Value:** 🔑 **${formatNumber(offerTotal)}**\n\u200B`, inline: true },
+          { name: '📥 Their Offer', value: `${formatItemList(requestSide.items)}\n\n**Total Value:** 🔑 **${formatNumber(requestTotal)}**\n\u200B`, inline: true },
           { name: '\u200B', value: '\u200B', inline: false }, // Spacer
-          { name: '📊 Verdict', value: `**${verdict}**\nDifference: 🔑 ${formatNumber(Math.abs(diff))}`, inline: true },
-          { name: '💎 Total Taxes', value: `You pay: 💎 ${formatNumber(offerSide.totalGems)} | 🪙 ${formatNumber(offerSide.totalGold)}\nThey pay: 💎 ${formatNumber(requestSide.totalGems)} | 🪙 ${formatNumber(requestSide.totalGold)}`, inline: true }
+          { name: '📊 Verdict', value: `> **${verdict}**\n> Difference: 🔑 **${formatNumber(Math.abs(diff))}**`, inline: true },
+          { name: '💎 Total Taxes', value: `> **You pay:** 💎 ${formatNumber(offerSide.totalGems)} | 🪙 ${formatNumber(offerSide.totalGold)}\n> **They pay:** 💎 ${formatNumber(requestSide.totalGems)} | 🪙 ${formatNumber(requestSide.totalGold)}`, inline: true }
         )
         .setFooter({ text: 'Calculated in Keys 🔑', iconURL: interaction.client.user.displayAvatarURL() })
         .setTimestamp();

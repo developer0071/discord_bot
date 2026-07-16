@@ -146,5 +146,6 @@ function formatNumber(num) {
 module.exports = {
   calculateSide,
   formatNumber,
-  fuzzyMatch
+  fuzzyMatch,
+  parseNumericalValue
 };
