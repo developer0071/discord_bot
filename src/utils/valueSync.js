@@ -78,58 +78,101 @@ async function syncValues(client) {
 
 async function updateLivePanel(channel, organizedData) {
   try {
-    const embed = new EmbedBuilder()
+    const embeds = [];
+    let currentEmbed = new EmbedBuilder()
       .setColor(0x5865f2)
       .setTitle('📊 Live AOT:R Value List')
-      .setDescription('Auto-updating values straight from the docs.\\nUse `/value <item> [amount]` to calculate totals.')
-      .setFooter({ text: 'Last Updated' })
-      .setTimestamp();
+      .setDescription('Auto-updating values straight from the docs.\\nUse `/value <item> [amount]` to calculate totals.\\nUse `/tradecalc` to compare trades!');
+    
+    let currentEmbedChars = currentEmbed.data.title.length + currentEmbed.data.description.length;
+    let currentEmbedFields = 0;
 
-    // Add fields for each rarity
     for (const [rarity, items] of Object.entries(organizedData)) {
-      if (items.length > 0) {
-        // Discord fields max 1024 chars, we might need to split
-        let fieldValue = '';
-        let part = 1;
-        items.forEach(item => {
-          if ((fieldValue.length + item.length + 1) > 1000) {
-            embed.addFields({ name: `${rarity} (Part ${part})`, value: fieldValue, inline: false });
-            fieldValue = item + '\\n';
-            part++;
-          } else {
-            fieldValue += item + '\\n';
+      if (items.length === 0) continue;
+
+      let fieldValue = '';
+      let part = 1;
+
+      items.forEach((item) => {
+        if ((fieldValue.length + item.length + 1) > 1000) {
+          const fieldName = `${rarity} (Part ${part})`;
+          
+          if (currentEmbedFields >= 25 || (currentEmbedChars + fieldName.length + fieldValue.length) > 5000) {
+            embeds.push(currentEmbed);
+            currentEmbed = new EmbedBuilder().setColor(0x5865f2);
+            currentEmbedChars = 0;
+            currentEmbedFields = 0;
           }
-        });
-        if (fieldValue) {
-          const fieldName = part > 1 ? `${rarity} (Part ${part})` : rarity;
-          embed.addFields({ name: fieldName, value: fieldValue, inline: false });
+
+          currentEmbed.addFields({ name: fieldName, value: fieldValue, inline: false });
+          currentEmbedChars += fieldName.length + fieldValue.length;
+          currentEmbedFields++;
+          
+          fieldValue = item + '\\n';
+          part++;
+        } else {
+          fieldValue += item + '\\n';
         }
+      });
+
+      if (fieldValue) {
+        const fieldName = part > 1 ? `${rarity} (Part ${part})` : rarity;
+        if (currentEmbedFields >= 25 || (currentEmbedChars + fieldName.length + fieldValue.length) > 5000) {
+          embeds.push(currentEmbed);
+          currentEmbed = new EmbedBuilder().setColor(0x5865f2);
+          currentEmbedChars = 0;
+          currentEmbedFields = 0;
+        }
+        currentEmbed.addFields({ name: fieldName, value: fieldValue, inline: false });
+        currentEmbedChars += fieldName.length + fieldValue.length;
+        currentEmbedFields++;
       }
     }
 
-    const state = await SystemState.findOne({ key: 'valueListMessageId' });
-    let messageId = state ? state.value : null;
-    let message;
+    if (currentEmbedFields > 0) {
+      embeds.push(currentEmbed);
+    }
+    
+    if (embeds.length > 0) {
+      embeds[embeds.length - 1].setFooter({ text: 'Last Updated' }).setTimestamp();
+    }
 
-    if (messageId) {
+    const state = await SystemState.findOne({ key: 'valueListMessageIds' });
+    let messageIds = [];
+    if (state && state.value) {
       try {
-        message = await channel.messages.fetch(messageId);
-      } catch (err) {
-        // Message might be deleted
-        message = null;
+        messageIds = JSON.parse(state.value);
+      } catch(e) {
+        messageIds = [state.value];
+      }
+    } else {
+      const oldState = await SystemState.findOne({ key: 'valueListMessageId' });
+      if (oldState && oldState.value) {
+        messageIds.push(oldState.value);
       }
     }
 
-    if (message) {
-      await message.edit({ embeds: [embed] });
-    } else {
-      const newMsg = await channel.send({ embeds: [embed] });
-      await SystemState.updateOne(
-        { key: 'valueListMessageId' },
-        { $set: { value: newMsg.id } },
-        { upsert: true }
-      );
+    for (let i = 0; i < embeds.length; i++) {
+      if (i < messageIds.length) {
+        try {
+          const msg = await channel.messages.fetch(messageIds[i]);
+          await msg.edit({ embeds: [embeds[i]] });
+        } catch (err) {
+          const newMsg = await channel.send({ embeds: [embeds[i]] });
+          messageIds[i] = newMsg.id;
+        }
+      } else {
+        const newMsg = await channel.send({ embeds: [embeds[i]] });
+        messageIds.push(newMsg.id);
+      }
     }
+
+    await SystemState.updateOne(
+      { key: 'valueListMessageIds' },
+      { $set: { value: JSON.stringify(messageIds) } },
+      { upsert: true }
+    );
+
   } catch (err) {
     console.error('❌ Failed to update live panel:', err.message);
   }
