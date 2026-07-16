@@ -57,8 +57,7 @@ function deny(interaction) {
 const queueCommand = {
   data: new SlashCommandBuilder()
     .setName('queue')
-    .setDescription('View the current regiment queue and slot status')
-    .setDefaultMemberPermissions(null),
+    .setDescription('View the current regiment queue and slot status'),
 
   async execute(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -71,8 +70,7 @@ const queueCommand = {
 const myPositionCommand = {
   data: new SlashCommandBuilder()
     .setName('myposition')
-    .setDescription('Check your position in the regiment queue')
-    .setDefaultMemberPermissions(null),
+    .setDescription('Check your position in the regiment queue'),
 
   async execute(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -1074,7 +1072,6 @@ const valueCommand = {
   data: new SlashCommandBuilder()
     .setName('value')
     .setDescription('Get the trade value of an AOT:R item')
-    .setDefaultMemberPermissions(null)
     .addStringOption(opt =>
       opt.setName('item')
         .setDescription('The name of the item to search for')
@@ -1226,7 +1223,6 @@ const tradeCalcCommand = {
   data: new SlashCommandBuilder()
     .setName('tradecalc')
     .setDescription('Calculate and compare trade values')
-    .setDefaultMemberPermissions(null)
     .addStringOption(opt =>
       opt.setName('offer')
         .setDescription('Your offer (e.g. 2x colossal serum, 1x fritz)')
