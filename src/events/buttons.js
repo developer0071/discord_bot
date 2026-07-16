@@ -5,6 +5,7 @@ const {
 } = require('discord.js');
 
 const info = require('../config/info');
+const tradeInfo = require('../config/trade_info');
 const families = require('../config/families');
 const timevote = require('../utils/timevote');
 const verification = require('./verification');
@@ -257,6 +258,7 @@ const handlers = {
 
 // Info-panel sections keyed by their button id.
 const infoSections = Object.fromEntries(info.sections.map((s) => [s.id, s]));
+const tradeInfoSections = Object.fromEntries(tradeInfo.sections.map((s) => [s.id, s]));
 
 async function handleButton(interaction) {
   // ── Giveaway entry (Firestore + message edit → defer first) ──
@@ -332,11 +334,23 @@ async function handleButton(interaction) {
   }
 
   // ── Info-panel buttons (static text → reply instantly) ──
-  const section = infoSections[interaction.customId];
+  let section = infoSections[interaction.customId];
   if (section) {
     return interaction.reply({
       embeds: [new EmbedBuilder()
         .setColor(section.color || info.panel.color)
+        .setTitle(section.title)
+        .setDescription(section.description)],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  // ── Trade-panel buttons (static text → reply instantly) ──
+  section = tradeInfoSections[interaction.customId];
+  if (section) {
+    return interaction.reply({
+      embeds: [new EmbedBuilder()
+        .setColor(section.color || tradeInfo.panel.color)
         .setTitle(section.title)
         .setDescription(section.description)],
       flags: MessageFlags.Ephemeral,

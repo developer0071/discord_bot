@@ -40,6 +40,7 @@ const {
 const { canManage, canAdd } = require('../utils/permissions');
 const { promoteFromQueue } = require('../events/guildMemberRemove');
 const info = require('../config/info');
+const tradeInfo = require('../config/trade_info');
 const timevote = require('../utils/timevote');
 const vip = require('../config/vipServers');
 
@@ -351,6 +352,92 @@ const infoPanelCommand = {
       flags: MessageFlags.Ephemeral,
     });
   },
+};
+
+// ─── /sendtradeinstructionpanel — MANAGE ────────────────────────────────────────────────────────
+const sendTradeInstructionPanelCommand = {
+  data: new SlashCommandBuilder()
+    .setName('sendtradeinstructionpanel')
+    .setDescription('Post the trade instructions panel in this channel')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+
+  async execute(interaction) {
+    if (!canManage(interaction.member)) return deny(interaction);
+
+    const embed = new EmbedBuilder()
+      .setColor(tradeInfo.panel.color)
+      .setTitle(tradeInfo.panel.title)
+      .setDescription(tradeInfo.panel.description);
+    if (tradeInfo.panel.thumbnail) embed.setThumbnail(tradeInfo.panel.thumbnail);
+
+    const rows = [];
+    for (let i = 0; i < tradeInfo.sections.length; i += 5) {
+      const row = new ActionRowBuilder().addComponents(
+        tradeInfo.sections.slice(i, i + 5).map((s) =>
+          new ButtonBuilder()
+            .setCustomId(s.id)
+            .setLabel(s.label)
+            .setEmoji(s.emoji)
+            .setStyle(ButtonStyle[s.style] || ButtonStyle.Secondary))
+      );
+      rows.push(row);
+    }
+
+    await interaction.channel.send({ embeds: [embed], components: rows });
+    await interaction.reply({
+      embeds: [successEmbed('Trade instructions panel posted in this channel.')],
+      flags: MessageFlags.Ephemeral,
+    });
+  },
+};
+
+// ─── /clearchat — MANAGE ────────────────────────────────────────────────────────
+const clearChatCommand = {
+  data: new SlashCommandBuilder()
+    .setName('clearchat')
+    .setDescription('Delete up to 1000 messages in the current channel')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+
+  async execute(interaction) {
+    if (!canManage(interaction.member)) return deny(interaction);
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    let deletedCount = 0;
+    let fetching = true;
+
+    try {
+      while (fetching && deletedCount < 1000) {
+        const messages = await interaction.channel.messages.fetch({ limit: 100 });
+        if (messages.size === 0) {
+          fetching = false;
+          break;
+        }
+
+        const twoWeeksAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+        const messagesToDelete = messages.filter(msg => msg.createdTimestamp > twoWeeksAgo);
+
+        if (messagesToDelete.size === 0) {
+          fetching = false;
+          break;
+        }
+
+        const deleted = await interaction.channel.bulkDelete(messagesToDelete, true);
+        deletedCount += deleted.size;
+
+        if (deleted.size < messages.size) {
+          fetching = false;
+        }
+
+        await new Promise(r => setTimeout(r, 1000));
+      }
+
+      await interaction.editReply({ embeds: [successEmbed(`✅ Cleared ${deletedCount} messages.`)] });
+    } catch (err) {
+      console.error('Clear chat error:', err);
+      await interaction.editReply({ embeds: [errorEmbed(`❌ Error clearing chat: ${err.message}`)] });
+    }
+  }
 };
 
 // ─── /timevote — MANAGE ─────────────────────────────────────────────────────────
@@ -1277,6 +1364,8 @@ module.exports = [
   removeQueueCommand,
   setupPanelCommand,
   infoPanelCommand,
+  sendTradeInstructionPanelCommand,
+  clearChatCommand,
   setupVerifyCommand,
   timeVoteCommand,
   giveRoleCommand,
