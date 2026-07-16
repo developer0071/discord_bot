@@ -8,8 +8,18 @@ async function syncValues(client) {
   // GIDs for different tabs in the Google Sheet
   const gids = [
     '1606480838', // ALL Cosmetics
+    '1161641948', // Anime All Star Crates
+    '931952227',  // Blade Burst Crate
+    '346887600',  // Scout Fashions
+    '300368556',  // Battlepass
+    '30110624',   // Event
+    '824267924',  // Other Cosmetics
     '1985243848', // Family
-    '1207135228'  // Raid & Mission Drops
+    '1256383298', // Artifact
+    '365176366',  // Perks
+    '1207135228', // Raid & Mission Drops
+    '1350029234', // Shop
+    '760101351'   // Robux Items
   ];
 
   try {
