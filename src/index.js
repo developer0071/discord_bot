@@ -76,6 +76,14 @@ client.on('interactionCreate', async interaction => {
       if (!command) return;
       await command.execute(interaction);
 
+    } else if (interaction.isAutocomplete()) {
+      const command = client.commands.get(interaction.commandName);
+      if (!command || !command.autocomplete) return;
+      try {
+        await command.autocomplete(interaction);
+      } catch (err) {
+        console.error('[Autocomplete Error]', err);
+      }
     } else if (interaction.isButton()) {
       if (buttonLimiter.isLimited(userId)) {
         return interaction.reply({

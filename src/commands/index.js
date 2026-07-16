@@ -989,6 +989,7 @@ const valueCommand = {
       opt.setName('item')
         .setDescription('The name of the item to search for')
         .setRequired(true)
+        .setAutocomplete(true)
     )
     .addIntegerOption(opt =>
       opt.setName('amount')
@@ -997,6 +998,27 @@ const valueCommand = {
         .setMinValue(1)
         .setMaxValue(100)
     ),
+
+  async autocomplete(interaction) {
+    const focusedValue = interaction.options.getFocused();
+    if (!focusedValue) return await interaction.respond([]);
+
+    try {
+      const allItems = await ValueItem.find({});
+      const itemNames = allItems.map(i => i.itemName);
+      
+      const filtered = itemNames
+        .filter(choice => choice.toLowerCase().includes(focusedValue.toLowerCase()))
+        .slice(0, 25);
+
+      await interaction.respond(
+        filtered.map(choice => ({ name: choice, value: choice }))
+      );
+    } catch (err) {
+      console.error(err);
+      await interaction.respond([]);
+    }
+  },
 
   async execute(interaction) {
     await interaction.deferReply(); // Public reply
@@ -1045,7 +1067,6 @@ const valueCommand = {
           { name: '💎 Tax (Gems)', value: multiplyValueString(itemData.taxGems, amount) || 'N/A', inline: true },
           { name: '🪙 Tax (Gold)', value: multiplyValueString(itemData.taxGold, amount) || 'N/A', inline: true }
         )
-        .setThumbnail('https://i.imgur.com/eB9B1Zg.png') // Cool placeholder/default icon
         .setFooter({ text: 'Data sourced from AOT:R Value List', iconURL: interaction.client.user.displayAvatarURL() })
         .setTimestamp(itemData.lastUpdated);
 
@@ -1069,12 +1090,56 @@ const tradeCalcCommand = {
       opt.setName('offer')
         .setDescription('Your offer (e.g. 2x colossal serum, 1x fritz)')
         .setRequired(true)
+        .setAutocomplete(true)
     )
     .addStringOption(opt =>
       opt.setName('request')
         .setDescription('What you want (e.g. 1x black flash aura)')
         .setRequired(true)
+        .setAutocomplete(true)
     ),
+
+  async autocomplete(interaction) {
+    const focusedValue = interaction.options.getFocused();
+    if (!focusedValue) return await interaction.respond([]);
+
+    try {
+      const allItems = await ValueItem.find({});
+      const itemNames = allItems.map(i => i.itemName);
+      
+      const parts = focusedValue.split(',');
+      const lastPart = parts[parts.length - 1];
+      const match = lastPart.match(/^(\\s*\\d+(?:\\.\\d+)?\\s*x?\\s+)(.*)$/i);
+      
+      let prefix = '';
+      let searchTerm = lastPart;
+      
+      if (match) {
+        prefix = match[1];
+        searchTerm = match[2];
+      }
+      
+      const cleanTerm = searchTerm.toLowerCase().trim();
+      if (!cleanTerm) return await interaction.respond([]);
+      
+      const filtered = itemNames
+        .filter(choice => choice.toLowerCase().includes(cleanTerm))
+        .slice(0, 25);
+        
+      const baseString = parts.slice(0, -1).join(',');
+      const comma = baseString ? ',' : '';
+        
+      await interaction.respond(
+        filtered.map(choice => {
+          const fullValue = `${baseString}${comma}${prefix}${choice}`;
+          return { name: fullValue.slice(0, 100), value: fullValue.slice(0, 100) };
+        })
+      );
+    } catch (err) {
+      console.error(err);
+      await interaction.respond([]);
+    }
+  },
 
   async execute(interaction) {
     await interaction.deferReply();
