@@ -1085,8 +1085,8 @@ const tradeCalcCommand = {
       const requestSide = await calculateSide(requestStr);
 
       if (offerSide.errors.length > 0 || requestSide.errors.length > 0) {
-        const allErrors = [...offerSide.errors, ...requestSide.errors].join('\\n');
-        return interaction.editReply({ embeds: [errorEmbed(`**Errors found:**\\n${allErrors}`)] });
+        const allErrors = [...offerSide.errors, ...requestSide.errors].join('\n');
+        return interaction.editReply({ embeds: [errorEmbed(`**Errors found:**\n${allErrors}`)] });
       }
 
       const offerTotal = offerSide.totalKeys;
@@ -1110,18 +1110,18 @@ const tradeCalcCommand = {
       }
 
       const formatItemList = (items) => {
-        return items.map(i => `${i.amount}x **${i.name}** (🔑 ${formatNumber(i.keys)})`).join('\\n') || 'None';
+        return items.map(i => `${i.amount}x **${i.name}** (🔑 ${formatNumber(i.keys)})`).join('\n') || 'None';
       };
 
       const embed = new EmbedBuilder()
         .setColor(color)
         .setTitle('⚖️ Trade Calculator')
         .addFields(
-          { name: '📤 Your Offer', value: formatItemList(offerSide.items) + `\\n\\n**Total Value:** 🔑 ${formatNumber(offerTotal)}`, inline: true },
-          { name: '📥 Their Offer', value: formatItemList(requestSide.items) + `\\n\\n**Total Value:** 🔑 ${formatNumber(requestTotal)}`, inline: true },
-          { name: '\\u200B', value: '\\u200B', inline: false }, // Spacer
-          { name: '📊 Verdict', value: `**${verdict}**\\nDifference: 🔑 ${formatNumber(Math.abs(diff))}`, inline: true },
-          { name: '💎 Total Taxes', value: `You pay: 💎 ${formatNumber(offerSide.totalGems)} | 🪙 ${formatNumber(offerSide.totalGold)}\\nThey pay: 💎 ${formatNumber(requestSide.totalGems)} | 🪙 ${formatNumber(requestSide.totalGold)}`, inline: true }
+          { name: '📤 Your Offer', value: formatItemList(offerSide.items) + `\n\n**Total Value:** 🔑 ${formatNumber(offerTotal)}`, inline: true },
+          { name: '📥 Their Offer', value: formatItemList(requestSide.items) + `\n\n**Total Value:** 🔑 ${formatNumber(requestTotal)}`, inline: true },
+          { name: '\u200B', value: '\u200B', inline: false }, // Spacer
+          { name: '📊 Verdict', value: `**${verdict}**\nDifference: 🔑 ${formatNumber(Math.abs(diff))}`, inline: true },
+          { name: '💎 Total Taxes', value: `You pay: 💎 ${formatNumber(offerSide.totalGems)} | 🪙 ${formatNumber(offerSide.totalGold)}\nThey pay: 💎 ${formatNumber(requestSide.totalGems)} | 🪙 ${formatNumber(requestSide.totalGold)}`, inline: true }
         )
         .setFooter({ text: 'Calculated in Keys 🔑', iconURL: interaction.client.user.displayAvatarURL() })
         .setTimestamp();

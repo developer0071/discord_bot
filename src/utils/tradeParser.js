@@ -40,6 +40,61 @@ function parseInputString(input) {
   return items;
 }
 
+function fuzzyMatch(query, itemNames) {
+  query = query.toLowerCase().trim();
+  const cleanQuery = query.replace(/[^a-z0-9\\s]/gi, '');
+  
+  const exact = itemNames.find(n => n.toLowerCase() === query);
+  if (exact) return exact;
+
+  const contains = itemNames.find(n => n.toLowerCase().includes(query));
+  if (contains) return contains;
+
+  const queryTokens = cleanQuery.split(/\\s+/).filter(Boolean);
+  let bestMatch = null;
+  let maxScore = 0;
+
+  for (const name of itemNames) {
+    const cleanName = name.toLowerCase().replace(/[^a-z0-9\\s]/gi, '');
+    const nameTokens = cleanName.split(/\\s+/).filter(Boolean);
+    let score = 0;
+    
+    let allTokensMatched = true;
+    for (const q of queryTokens) {
+      const match = nameTokens.find(n => n.startsWith(q));
+      if (match) {
+        score += q.length;
+      } else {
+        const subMatch = nameTokens.find(n => n.includes(q));
+        if (subMatch) {
+          score += q.length * 0.5;
+        } else {
+          allTokensMatched = false;
+          break;
+        }
+      }
+    }
+
+    if (allTokensMatched && score > maxScore) {
+      maxScore = score;
+      bestMatch = name;
+    }
+  }
+
+  if (!bestMatch && queryTokens.length === 1 && cleanQuery.length >= 2) {
+    for (const name of itemNames) {
+      const cleanName = name.toLowerCase().replace(/[^a-z0-9\\s]/gi, '');
+      const nameTokens = cleanName.split(/\\s+/).filter(Boolean);
+      const acronym = nameTokens.map(t => t[0]).join('');
+      if (acronym === cleanQuery || acronym.startsWith(cleanQuery)) {
+        return name;
+      }
+    }
+  }
+
+  return bestMatch;
+}
+
 async function calculateSide(inputString) {
   const parsedItems = parseInputString(inputString);
   const results = {
@@ -50,17 +105,17 @@ async function calculateSide(inputString) {
     errors: []
   };
 
+  const allItems = await ValueItem.find({});
+  const itemNames = allItems.map(i => i.itemName);
+
   for (const item of parsedItems) {
-    // Try exact match first
-    let dbItem = await ValueItem.findOne({ itemName: { $regex: new RegExp(`^${item.name}$`, 'i') } });
-    if (!dbItem) {
-      // Try partial match if exact fails
-      dbItem = await ValueItem.findOne({ itemName: { $regex: item.name, $options: 'i' } });
-      if (!dbItem) {
-        results.errors.push(`Could not find item: **${item.name}**`);
-        continue;
-      }
+    const matchedName = fuzzyMatch(item.name, itemNames);
+    if (!matchedName) {
+      results.errors.push(`Could not find item: **${item.name}**`);
+      continue;
     }
+
+    const dbItem = allItems.find(i => i.itemName === matchedName);
 
     const valueKeys = parseNumericalValue(dbItem.value) * item.amount;
     const taxGems = parseNumericalValue(dbItem.taxGems) * item.amount;
