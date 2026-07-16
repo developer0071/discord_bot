@@ -11,7 +11,7 @@ const {
 const axios = require('axios');
 const { parse } = require('csv-parse/sync');
 const ValueItem = require('../models/ValueItem');
-const { calculateSide, formatNumber } = require('../utils/tradeParser');
+const { calculateSide, formatNumber, fuzzyMatch } = require('../utils/tradeParser');
 const {
   getRegimentStatus,
   getFullQueue,
@@ -1001,20 +1001,22 @@ const valueCommand = {
   async execute(interaction) {
     await interaction.deferReply(); // Public reply
 
-    const searchTerm = interaction.options.getString('item').toLowerCase();
+    const searchTerm = interaction.options.getString('item');
     const amount = interaction.options.getInteger('amount') || 1;
     
     try {
-      // Find the item in MongoDB using a case-insensitive regex
-      const itemData = await ValueItem.findOne({ 
-        itemName: { $regex: searchTerm, $options: 'i' } 
-      });
+      // Use fuzzy matching to find the closest item
+      const allItems = await ValueItem.find({});
+      const itemNames = allItems.map(i => i.itemName);
+      const matchedName = fuzzyMatch(searchTerm, itemNames);
 
-      if (!itemData) {
+      if (!matchedName) {
         return interaction.editReply({ 
-          embeds: [errorEmbed(`Could not find an item matching **${interaction.options.getString('item')}**.`)] 
+          embeds: [errorEmbed(`Could not find an item matching **${searchTerm}**. Try being more specific!`)] 
         });
       }
+
+      const itemData = allItems.find(i => i.itemName === matchedName);
 
       // Determine embed color based on rarity
       let embedColor = 0x2b2d31; // Default
