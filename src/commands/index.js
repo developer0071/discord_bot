@@ -101,7 +101,7 @@ const promoteCommand = {
   data: new SlashCommandBuilder()
     .setName('promote')
     .setDescription('Promote the next person in queue into the regiment')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
+    .setDefaultMemberPermissions(0)
     .addStringOption(opt =>
       opt.setName('regiment')
         .setDescription('Which regiment to promote the user to')
@@ -132,7 +132,7 @@ const addCommand = {
   data: new SlashCommandBuilder()
     .setName('add')
     .setDescription('Add a specific user to the regiment')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
+    .setDefaultMemberPermissions(0)
     .addUserOption(opt =>
       opt.setName('user')
         .setDescription('The user to add')
@@ -171,7 +171,7 @@ const membersCommand = {
   data: new SlashCommandBuilder()
     .setName('members')
     .setDescription('Show everyone currently in the regiment')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
+    .setDefaultMemberPermissions(0),
 
   async execute(interaction) {
     if (!canAdd(interaction.member)) return deny(interaction);
@@ -197,7 +197,7 @@ const setSlotsCommand = {
   data: new SlashCommandBuilder()
     .setName('setslots')
     .setDescription('Change the max regiment slots')
-    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers)
+    .setDefaultMemberPermissions(0)
     .addIntegerOption(opt =>
       opt.setName('slots')
         .setDescription('New maximum number of regiment slots')
@@ -227,7 +227,7 @@ const removeMemberCommand = {
   data: new SlashCommandBuilder()
     .setName('removemember')
     .setDescription('Remove a user from the regiment (frees their slot)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers)
+    .setDefaultMemberPermissions(0)
     .addUserOption(opt =>
       opt.setName('user')
         .setDescription('The user to remove')
@@ -259,7 +259,7 @@ const removeQueueCommand = {
   data: new SlashCommandBuilder()
     .setName('removequeue')
     .setDescription('Remove a user from the queue')
-    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers)
+    .setDefaultMemberPermissions(0)
     .addUserOption(opt =>
       opt.setName('user')
         .setDescription('The user to remove from queue')
@@ -282,7 +282,7 @@ const setupPanelCommand = {
   data: new SlashCommandBuilder()
     .setName('setuppanel')
     .setDescription('Post the regiment join panel (with buttons) in this channel')
-    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
+    .setDefaultMemberPermissions(0),
 
   async execute(interaction) {
     if (!canManage(interaction.member)) return deny(interaction);
@@ -319,7 +319,7 @@ const infoPanelCommand = {
   data: new SlashCommandBuilder()
     .setName('infopanel')
     .setDescription('Post the information panel (rules, guidelines, etc.) in this channel')
-    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
+    .setDefaultMemberPermissions(0),
 
   async execute(interaction) {
     if (!canManage(interaction.member)) return deny(interaction);
@@ -357,7 +357,7 @@ const sendTradeInstructionPanelCommand = {
   data: new SlashCommandBuilder()
     .setName('sendtradeinstructionpanel')
     .setDescription('Post the trade instructions panel in this channel')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+    .setDefaultMemberPermissions(0),
 
   async execute(interaction) {
     if (!canManage(interaction.member)) return deny(interaction);
@@ -394,7 +394,7 @@ const clearChatCommand = {
   data: new SlashCommandBuilder()
     .setName('clearchat')
     .setDescription('Delete up to 1000 messages in the current channel')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+    .setDefaultMemberPermissions(0),
 
   async execute(interaction) {
     if (!canManage(interaction.member)) return deny(interaction);
@@ -443,7 +443,7 @@ const timeVoteCommand = {
   data: new SlashCommandBuilder()
     .setName('timevote')
     .setDescription("Post a UTC time vote that auto-converts to each member's local time")
-    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
+    .setDefaultMemberPermissions(0),
 
   async execute(interaction) {
     if (!canManage(interaction.member)) return deny(interaction);
@@ -464,7 +464,7 @@ const setupVerifyCommand = {
   data: new SlashCommandBuilder()
     .setName('setupverify')
     .setDescription('Post the verification panel in this channel')
-    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
+    .setDefaultMemberPermissions(0),
 
   async execute(interaction) {
     if (!canManage(interaction.member)) return deny(interaction);
@@ -499,7 +499,7 @@ const giveRoleCommand = {
   data: new SlashCommandBuilder()
     .setName('giverole')
     .setDescription('Give a role to all members (or a single user) in the server')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
+    .setDefaultMemberPermissions(0)
     .addRoleOption(opt =>
       opt.setName('role')
         .setDescription('The role to assign')
@@ -666,7 +666,7 @@ const transferBannerCommand = {
   data: new SlashCommandBuilder()
     .setName('transferbannerticketowner')
     .setDescription('Transfer join/leave banners from tickets to the new TICKET-OWNERS channel')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDefaultMemberPermissions(0),
 
   async execute(interaction) {
     if (!canManage(interaction.member)) return deny(interaction);
@@ -736,7 +736,7 @@ const transferSunBannerCommand = {
   data: new SlashCommandBuilder()
     .setName('transfersunticketowners')
     .setDescription('Transfer join/leave banners for Sunshine to the new Sunshine TICKET-OWNERS channel')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDefaultMemberPermissions(0),
 
   async execute(interaction) {
     if (!canManage(interaction.member)) return deny(interaction);
@@ -816,7 +816,7 @@ const fixRoleCommand = {
   data: new SlashCommandBuilder()
     .setName('fixrole')
     .setDescription('Swap roles for a user (e.g. remove Recruit, add Suncadet)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
+    .setDefaultMemberPermissions(0)
     .addUserOption(opt =>
       opt.setName('user')
         .setDescription('The user to modify')
@@ -899,7 +899,7 @@ const giveChannelAccessCommand = {
   data: new SlashCommandBuilder()
     .setName('givechannelaccess')
     .setDescription('Grant specific permissions to a role for a category or channel')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDefaultMemberPermissions(0)
     .addRoleOption(opt =>
       opt.setName('role')
         .setDescription('The role to grant access to (e.g. SunCadet)')
@@ -970,7 +970,7 @@ const syncDataCommand = {
   data: new SlashCommandBuilder()
     .setName('syncdata')
     .setDescription('Auto-analyze and synchronize Discord members with the website databases')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDefaultMemberPermissions(0),
 
   async execute(interaction) {
     if (!canManage(interaction.member)) return deny(interaction);

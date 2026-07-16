@@ -9,14 +9,12 @@ client.once('ready', async () => {
   const commandData = commands.map(c => c.data.toJSON());
 
   try {
-    console.log('Started refreshing application (/) commands.');
-    for (const [guildId] of client.guilds.cache) {
-      await rest.put(
-        Routes.applicationGuildCommands(client.user.id, guildId),
-        { body: commandData }
-      );
-      console.log(`Successfully registered commands in guild ${guildId}`);
-    }
+    console.log('Started refreshing application (/) commands GLOBALLY.');
+    await rest.put(
+      Routes.applicationCommands(client.user.id),
+      { body: commandData }
+    );
+    console.log('Successfully registered commands globally.');
     process.exit(0);
   } catch (error) {
     console.error(error);
