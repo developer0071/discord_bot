@@ -15,6 +15,6 @@ module.exports = {
   servers: [
     { name: 'Hunters', code: '56A013DF' },
     { name: 'Ubels', code: '1722B2C5' },
-    { name: 'drk_edis', code: '7ADB8E4C' }
+    { name: 'drk_edis', code: '7ADB8E4C' },
   ],
 };
