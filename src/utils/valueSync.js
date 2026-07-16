@@ -61,7 +61,9 @@ async function syncValues(client) {
       console.log(`✅ Synced ${itemsToSave.length} AOT:R values to MongoDB.`);
     }
 
-    // Update Live Panel
+    // Update Live Panel (Removed per user request)
+    // The bot will only sync data to MongoDB silently.
+    /*
     const channelId = process.env.VALUE_LIST_CHANNEL;
     if (channelId && client) {
       const channel = client.channels.cache.get(channelId);
@@ -71,6 +73,7 @@ async function syncValues(client) {
         console.warn(`⚠️ VALUE_LIST_CHANNEL ${channelId} not found in cache.`);
       }
     }
+    */
   } catch (err) {
     console.error('❌ Failed to sync AOT:R values:', err.message);
   }
