@@ -1387,7 +1387,7 @@ const whisperCommand = {
       );
 
       await interaction.channel.send({ 
-        content: `${targetUser} you received a whisper from **${interaction.user.username}**`, 
+        content: `🤫 ${targetUser}, you received a whisper!`, 
         components: [row] 
       });
       await interaction.editReply({ embeds: [successEmbed(`Whisper successfully sent to ${targetUser.tag}.`)] });
