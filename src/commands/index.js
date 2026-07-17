@@ -1349,6 +1349,42 @@ const tradeCalcCommand = {
   }
 };
 
+// ─── /whisper ─────────────────────────────────────────────────────────────────
+const whisperCommand = {
+  data: new SlashCommandBuilder()
+    .setName('whisper')
+    .setDescription('Whisper a message to another user')
+    .addUserOption(option =>
+      option.setName('who')
+        .setDescription('The user to whisper to')
+        .setRequired(true))
+    .addStringOption(option =>
+      option.setName('message')
+        .setDescription('The message to send')
+        .setRequired(true)),
+
+  async execute(interaction) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    
+    const targetUser = interaction.options.getUser('who');
+    const message = interaction.options.getString('message');
+
+    if (targetUser.bot) {
+      return interaction.editReply({ embeds: [errorEmbed('You cannot whisper to a bot.')] });
+    }
+
+    try {
+      const whisperContent = `**${interaction.user.username}** *whispered you*:\n${message}`;
+
+      await targetUser.send({ content: whisperContent });
+      await interaction.editReply({ embeds: [successEmbed(`Whisper successfully sent to ${targetUser.tag}.`)] });
+    } catch (err) {
+      console.error('Error sending whisper:', err);
+      await interaction.editReply({ embeds: [errorEmbed(`Could not send a whisper to ${targetUser.tag}. They might have DMs disabled.`)] });
+    }
+  },
+};
+
 module.exports = [
   valueCommand,
   tradeCalcCommand,
@@ -1374,4 +1410,5 @@ module.exports = [
   fixRoleCommand,
   giveChannelAccessCommand,
   syncDataCommand,
+  whisperCommand,
 ];
