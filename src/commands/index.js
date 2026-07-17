@@ -393,7 +393,7 @@ const sendTradeInstructionPanelCommand = {
 const clearChatCommand = {
   data: new SlashCommandBuilder()
     .setName('clearchat')
-    .setDescription('Delete up to 1000 messages in the current channel')
+    .setDescription('Delete up to 10 messages in the current channel')
     .setDefaultMemberPermissions(0),
 
   async execute(interaction) {
@@ -405,14 +405,14 @@ const clearChatCommand = {
     let fetching = true;
 
     try {
-      while (fetching && deletedCount < 1000) {
-        const messages = await interaction.channel.messages.fetch({ limit: 100 });
+      while (fetching && deletedCount < 10) {
+        const messages = await interaction.channel.messages.fetch({ limit: 10 });
         if (messages.size === 0) {
           fetching = false;
           break;
         }
 
-        const twoWeeksAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+        const twoWeeksAgo = Date.now() - 14 * 24 * 60 * 60 * 10;
         const messagesToDelete = messages.filter(msg => msg.createdTimestamp > twoWeeksAgo);
 
         if (messagesToDelete.size === 0) {
@@ -427,7 +427,7 @@ const clearChatCommand = {
           fetching = false;
         }
 
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 10));
       }
 
       await interaction.editReply({ embeds: [successEmbed(`✅ Cleared ${deletedCount} messages.`)] });
