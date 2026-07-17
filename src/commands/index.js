@@ -1374,13 +1374,26 @@ const whisperCommand = {
     }
 
     try {
-      const whisperContent = `**${interaction.user.username}** *whispered you*:\n${message}`;
+      if (!global.whispers) global.whispers = new Map();
+      const whisperId = Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
+      global.whispers.set(whisperId, { from: interaction.user.username, to: targetUser.id, message });
 
-      await targetUser.send({ content: whisperContent });
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`whisper_read_${whisperId}`)
+          .setLabel('Read Whisper')
+          .setEmoji('💬')
+          .setStyle(ButtonStyle.Secondary)
+      );
+
+      await interaction.channel.send({ 
+        content: `${targetUser} you received a whisper from **${interaction.user.username}**`, 
+        components: [row] 
+      });
       await interaction.editReply({ embeds: [successEmbed(`Whisper successfully sent to ${targetUser.tag}.`)] });
     } catch (err) {
       console.error('Error sending whisper:', err);
-      await interaction.editReply({ embeds: [errorEmbed(`Could not send a whisper to ${targetUser.tag}. They might have DMs disabled.`)] });
+      await interaction.editReply({ embeds: [errorEmbed(`Could not send a whisper to ${targetUser.tag}.`)] });
     }
   },
 };

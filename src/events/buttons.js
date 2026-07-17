@@ -261,6 +261,19 @@ const infoSections = Object.fromEntries(info.sections.map((s) => [s.id, s]));
 const tradeInfoSections = Object.fromEntries(tradeInfo.sections.map((s) => [s.id, s]));
 
 async function handleButton(interaction) {
+  // ── Whisper read ──
+  if (interaction.customId.startsWith('whisper_read_')) {
+    const whisperId = interaction.customId.replace('whisper_read_', '');
+    if (!global.whispers || !global.whispers.has(whisperId)) {
+      return interaction.reply({ content: 'This whisper has expired or cannot be found.', flags: MessageFlags.Ephemeral });
+    }
+    const whisper = global.whispers.get(whisperId);
+    if (interaction.user.id !== whisper.to) {
+      return interaction.reply({ content: 'This whisper is not for you!', flags: MessageFlags.Ephemeral });
+    }
+    return interaction.reply({ content: `(${whisper.from}) whispered : ${whisper.message}`, flags: MessageFlags.Ephemeral });
+  }
+
   // ── Giveaway entry (Firestore + message edit → defer first) ──
   if (interaction.customId.startsWith('giveaway_enter_')) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
