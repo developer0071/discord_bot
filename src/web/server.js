@@ -388,7 +388,7 @@ load();
       const g = guild();
       const [status, members, queue, users, logs, settings, allDiscordMembers] = await Promise.all([
         fb.getRegimentStatus(req.regiment), fb.getAllMembers(req.regiment), fb.getFullQueue(req.regiment),
-        isReadOnly ? Promise.resolve([]) : fb.getAllUsers(),
+        fb.getAllUsers(),
         isReadOnly ? Promise.resolve([]) : fb.getLogs(50, req.regiment),
         isReadOnly ? Promise.resolve({}) : fb.getDashboardSettings(req.regiment),
         g ? Promise.resolve(g.members.cache) : Promise.resolve(new Map())
