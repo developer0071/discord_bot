@@ -17,6 +17,7 @@ export function AppProvider({ children }) {
   const [authError, setAuthError] = useState('');
   const [userTier, setUserTier] = useState('mod');
   const isMod = userTier === 'mod';
+  const isHelper = userTier === 'helper';
 
   // ── Data ──
   const [me, setMe] = useState(null);
@@ -64,7 +65,7 @@ export function AppProvider({ children }) {
   const loadUserTier = useCallback(async () => {
     try {
       const me = await fetchCurrentUser();
-      setUserTier(me.tier === 'readonly' ? 'readonly' : 'mod');
+      setUserTier(me.tier);
       return me;
     } catch (e) {
       if (e.message === 'Not authenticated' || e.message.includes('permission')) throw e;
@@ -76,7 +77,7 @@ export function AppProvider({ children }) {
   const loadData = useCallback(async () => {
     try {
       const data = await fetchDashboardData();
-      if (data.tier) setUserTier(data.tier === 'readonly' ? 'readonly' : 'mod');
+      if (data.tier) setUserTier(data.tier);
       if (data.me) setMe(data.me);
       setMembers(data.members);
 
@@ -309,7 +310,7 @@ export function AppProvider({ children }) {
 
   const value = {
     // Auth
-    authenticated, authError, login, logout, loading, userTier, isMod,
+    authenticated, authError, login, logout, loading, userTier, isMod, isHelper,
     // Data
     me, members, queue, logs, feedback, giveaways, channels, settings, regimentStatus,
     // Data loading

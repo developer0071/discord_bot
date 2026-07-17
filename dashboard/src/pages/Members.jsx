@@ -8,7 +8,7 @@ import './Members.css';
 const PAGE_SIZE = 8;
 
 export default function Members() {
-  const { members, kickMember, addMember, updateMember, reinstateMember, bulkKick, bulkUpdateStatus, syncMembers, showToast, isMod, searchQuery } = useApp();
+  const { members, kickMember, addMember, updateMember, reinstateMember, bulkKick, bulkUpdateStatus, syncMembers, showToast, isMod, isHelper, searchQuery } = useApp();
 
   // ── Local state ──
   const [filter, setFilter] = useState('all');
@@ -249,10 +249,10 @@ export default function Members() {
       {/* Table */}
       <div className="table-wrapper">
         {/* Bulk bar */}
-        {isMod && selected.size > 0 && (
+        {(isMod || isHelper) && selected.size > 0 && (
           <div className="bulk-bar visible">
             <span>{selected.size} selected</span>
-            <button className="btn btn-danger btn-sm" onClick={handleBulkKick}><i className="fas fa-user-slash" /> Kick Selected</button>
+            {isMod && <button className="btn btn-danger btn-sm" onClick={handleBulkKick}><i className="fas fa-user-slash" /> Kick Selected</button>}
             <button className="btn btn-ghost btn-sm" onClick={clearSelection}>Cancel</button>
           </div>
         )}
@@ -261,7 +261,7 @@ export default function Members() {
           <table>
             <thead>
               <tr>
-                {isMod && (
+                {(isMod || isHelper) && (
                   <th style={{ width: 40, paddingLeft: 16 }}>
                     <div className={`custom-check${pageItems.length && pageItems.every(m => selected.has(m.id)) ? ' checked' : ''}`} onClick={toggleSelectAll} />
                   </th>
@@ -271,17 +271,17 @@ export default function Members() {
                 <th onClick={() => handleColumnSort('status')}>Status <i className="fas fa-sort sort-icon" /></th>
                 <th onClick={() => handleColumnSort('joined')}>Joined <i className="fas fa-sort sort-icon" /></th>
                 <th onClick={() => handleColumnSort('feedback')}>Feedback <i className="fas fa-sort sort-icon" /></th>
-                {isMod && <th style={{ width: 120 }}>Actions</th>}
+                {(isMod || isHelper) && <th style={{ width: 120 }}>Actions</th>}
               </tr>
             </thead>
             <tbody>
               {pageItems.length === 0 ? (
-                <tr><td colSpan={isMod ? 7 : 5}>
+                <tr><td colSpan={(isMod || isHelper) ? 7 : 5}>
                   <div className="empty-state"><i className="fas fa-users-slash" /><p>No members found</p><span>Try adjusting your filters or search query</span></div>
                 </td></tr>
               ) : pageItems.map(m => (
                 <tr key={m.id} className={selected.has(m.id) ? 'row-selected' : ''}>
-                  {isMod && (
+                  {(isMod || isHelper) && (
                     <td style={{ paddingLeft: 16 }}>
                       <div className={`custom-check${selected.has(m.id) ? ' checked' : ''}`} onClick={() => toggleSelect(m.id)} />
                     </td>
@@ -303,15 +303,15 @@ export default function Members() {
                   <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={m.feedback || '-'}>
                     {m.feedback || <span style={{ color: 'var(--text-muted)' }}>—</span>}
                   </td>
-                  {isMod && (
+                  {(isMod || isHelper) && (
                     <td>
                       <div className="row-actions">
                         <button className="row-action-btn" title="View Details" onClick={() => openView(m)}><i className="fas fa-eye" /></button>
                         <button className="row-action-btn" title="Edit" onClick={() => openEdit(m)}><i className="fas fa-pen" /></button>
-                        {m.status !== 'kicked'
+                        {isMod && (m.status !== 'kicked'
                           ? <button className="row-action-btn danger" title="Kick" onClick={() => openKick(m)}><i className="fas fa-user-slash" /></button>
                           : <button className="row-action-btn" title="Reinstate" onClick={() => reinstateMember(m.userId)}><i className="fas fa-rotate-left" /></button>
-                        }
+                        )}
                       </div>
                     </td>
                   )}

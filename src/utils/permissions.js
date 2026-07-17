@@ -3,6 +3,7 @@
 //   REGIMENT_MANAGE_ROLE_IDS — full control: add + kick + manage (e.g. PREMIER, Commander)
 //   REGIMENT_ADD_ROLE_IDS    — add only (e.g. Lieutenant, Sergeant)
 //   MODS_SIDE                — full dashboard access (add, kick, settings, etc.)
+//   HELPER_SIDE              — dashboard access to check/edit status, but no kick/add
 //   NORMAL_SIDE              — read-only dashboard (members + queue view only)
 
 function roleIds(envVar) {
@@ -57,11 +58,19 @@ function isNormalSide(member) {
 }
 
 /**
- * Returns 'mod', 'readonly', or null if the member may not use the dashboard.
+ * Helper dashboard — can edit status and roblox username, but cannot kick/add.
+ */
+function isHelperSide(member) {
+  return hasAnyRole(member, roleIds('HELPER_SIDE'));
+}
+
+/**
+ * Returns 'mod', 'helper', 'readonly', or null if the member may not use the dashboard.
  * Mods take precedence when a user holds both role sets.
  */
 function getDashboardTier(member, regiment = null) {
   if (isModSide(member, regiment)) return 'mod';
+  if (isHelperSide(member)) return 'helper';
   if (isNormalSide(member)) return 'readonly';
   // Legacy fallback while HAVE_ACCESS_ROLES is still configured
   if (hasAnyRole(member, roleIds('HAVE_ACCESS_ROLES'))) return 'mod';
@@ -86,6 +95,7 @@ module.exports = {
   canManage,
   canAdd,
   isModSide,
+  isHelperSide,
   isNormalSide,
   getDashboardTier,
   canAccessDashboard,

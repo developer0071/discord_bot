@@ -5,7 +5,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 
 
 const fb = require('../utils/firebase');
 const auth = require('./auth');
-const { canAccessDashboard, canManage, getDashboardTier, isModSide, canManageGiveaways } = require('../utils/permissions');
+const { canAccessDashboard, canManage, getDashboardTier, isModSide, isHelperSide, canManageGiveaways } = require('../utils/permissions');
 const { assignRegimentRole, removeRegimentRole, adminNotifyEmbed, notifyAdmins } = require('../utils/helpers');
 const { promoteFromQueue } = require('../events/guildMemberRemove');
 const giveawayUtil = require('../utils/giveaway');
@@ -270,6 +270,14 @@ load();
     return res.status(403).json({ error: 'You need moderator permissions for this action' });
   }
 
+  async function requireHelperSide(req, res, next) {
+    const member = await fetchMember(req.user.id);
+    if (member && (isModSide(member, req.regiment) || isHelperSide(member))) {
+      return next();
+    }
+    return res.status(403).json({ error: 'You need helper permissions for this action' });
+  }
+
   // Managers only (create / end / delete giveaways).
   async function requireManage(req, res, next) {
     const member = await fetchMember(req.user.id);
@@ -375,13 +383,17 @@ load();
 
   app.get('/api/data', rlRead, async (req, res) => {
     try {
-      const tier = await refreshUserTier(req, res);
-      if (!tier) return;
-      const isReadOnly = tier !== 'mod';
-      const now = Date.now();
-      const canGv = canManageGiveaways(req.user.member);
+      const member = await fetchMember(req.user.id);
+      const tier = member ? getDashboardTier(member, req.regiment) : null;
+      if (!tier) return res.status(403).json({ error: 'Lost dashboard access' });
+      req.user.tier = tier;
 
-      if (!isReadOnly && dataCache[req.regiment] && (now - dataCacheTime[req.regiment]) < DATA_CACHE_TTL) {
+      const isReadOnly = tier === 'readonly';
+      const isMod = tier === 'mod';
+      const now = Date.now();
+      const canGv = canManageGiveaways(member);
+
+      if (isMod && dataCache[req.regiment] && (now - dataCacheTime[req.regiment]) < DATA_CACHE_TTL) {
         return res.json({ ...dataCache[req.regiment], tier: 'mod', canManageGiveaways: canGv });
       }
 
@@ -389,8 +401,8 @@ load();
       const [status, members, queue, users, logs, settings, allDiscordMembers] = await Promise.all([
         fb.getRegimentStatus(req.regiment), fb.getAllMembers(req.regiment), fb.getFullQueue(req.regiment),
         fb.getAllUsers(),
-        isReadOnly ? Promise.resolve([]) : fb.getLogs(50, req.regiment),
-        isReadOnly ? Promise.resolve({}) : fb.getDashboardSettings(req.regiment),
+        isMod ? fb.getLogs(50, req.regiment) : Promise.resolve([]),
+        isMod ? fb.getDashboardSettings(req.regiment) : Promise.resolve({}),
         g ? Promise.resolve(g.members.cache) : Promise.resolve(new Map())
       ]);
       const getAvatar = (id) => {
@@ -401,10 +413,10 @@ load();
       const profile = Object.fromEntries(users.map((u) => [u.discordId || u.userId, u]));
       const result = {
         status,
-        settings: isReadOnly ? {} : settings,
+        settings: isMod ? settings : {},
         me: {
-          tag: req.user.member?.user.tag || req.user.tag || 'User',
-          avatar: req.user.member ? req.user.member.user.displayAvatarURL({ extension: 'png', size: 64 }) : null
+          tag: member?.user.tag || req.user.tag || 'User',
+          avatar: member ? member.user.displayAvatarURL({ extension: 'png', size: 64 }) : null
         },
         members: members.map((m) => {
           return {
@@ -426,15 +438,15 @@ load();
           families: profile[q.userId]?.families || [],
           joinedAt: tsToMs(q.joinedAt),
         })),
-        logs: isReadOnly ? [] : logs.map((l) => ({ action: l.action, target: l.target, detail: l.detail, at: tsToMs(l.at) })),
-        feedback: isReadOnly ? [] : users
+        logs: isMod ? logs.map((l) => ({ action: l.action, target: l.target, detail: l.detail, at: tsToMs(l.at) })) : [],
+        feedback: isMod ? users
           .filter((u) => u.feedback)
-          .map((u) => ({ author: u.discordTag || u.discordId, text: u.feedback, date: tsToMs(u.verifiedAt) || Date.now() })),
-        tier: isReadOnly ? 'readonly' : 'mod',
+          .map((u) => ({ author: u.discordTag || u.discordId, text: u.feedback, date: tsToMs(u.verifiedAt) || Date.now() })) : [],
+        tier: tier,
         canManageGiveaways: canGv,
       };
 
-      if (!isReadOnly) {
+      if (isMod) {
         dataCache[req.regiment] = result;
         dataCacheTime[req.regiment] = now;
       }
@@ -508,8 +520,8 @@ load();
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
 
-  // ── Update a member's saved profile (e.g. Roblox username, status) ──
-  app.post('/api/update', requireModSide, rlWrite, async (req, res) => {
+  // ── Update member details (status, roblox) ──
+  app.post('/api/update', requireHelperSide, rlWrite, async (req, res) => {
     try {
       const { userId, roblox, status } = req.body;
       if (!userId) return res.status(400).json({ error: 'userId required' });
@@ -522,7 +534,7 @@ load();
   });
 
   // ── Bulk update status ──
-  app.post('/api/bulk-update', requireModSide, rlWrite, async (req, res) => {
+  app.post('/api/bulk-update', requireHelperSide, rlWrite, async (req, res) => {
     try {
       const { userIds, status } = req.body;
       if (!userIds || !Array.isArray(userIds)) return res.status(400).json({ error: 'userIds array required' });
