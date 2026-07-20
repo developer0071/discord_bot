@@ -1068,19 +1068,44 @@ function multiplyValueString(str, amount) {
   });
 }
 
+// Detects if an item name is a perk (contains +N level suffix)
+// Returns true if the item belongs to the perk category
+function isPerkItem(itemName) {
+  return /\+\d+\s*$/.test(itemName);
+}
+
+// Given a perk base name (e.g. "Founder's Blessing"), find all level variants in DB
+function getPerkLevelVariants(baseName, allItemNames) {
+  const lowerBase = baseName.replace(/\s*\+\s*\d+\s*$/i, '').toLowerCase().trim();
+  return allItemNames.filter(n => {
+    const stripped = n.replace(/\s*\+\s*\d+\s*$/i, '').toLowerCase().trim();
+    return stripped === lowerBase && isPerkItem(n);
+  });
+}
+
+// Extract inline amount prefix from a search string like "2x angel wings" -> { amount: 2, name: "angel wings" }
+function extractInlineAmount(str) {
+  str = str.trim();
+  const match = str.match(/^(\d+(?:\.\d+)?)\s*x?\s+(.+)$/i);
+  if (match) {
+    return { amount: parseFloat(match[1]), name: match[2].trim() };
+  }
+  return { amount: null, name: str };
+}
+
 const valueCommand = {
   data: new SlashCommandBuilder()
     .setName('value')
-    .setDescription('Get the trade value of an AOT:R item')
+    .setDescription('Get the trade value of an AOT:R item (you can also type "2x item name" directly)')
     .addStringOption(opt =>
       opt.setName('item')
-        .setDescription('The name of the item to search for')
+        .setDescription('Item name — you can prefix with amount: "2x angel wings" or just "angel wings"')
         .setRequired(true)
         .setAutocomplete(true)
     )
     .addIntegerOption(opt =>
       opt.setName('amount')
-        .setDescription('Multiplier for the values (e.g., 3 to see value of 3x items)')
+        .setDescription('Multiplier (optional — you can also write "2x" in the item field instead)')
         .setRequired(false)
         .setMinValue(1)
         .setMaxValue(100)
@@ -1093,9 +1118,13 @@ const valueCommand = {
     try {
       const allItems = await ValueItem.find({});
       const itemNames = allItems.map(i => i.itemName);
-      
+
+      // Strip any inline amount prefix like "2x " before filtering
+      const { name: cleanSearch } = extractInlineAmount(focusedValue);
+      const searchLower = cleanSearch.toLowerCase();
+
       const filtered = itemNames
-        .filter(choice => choice.toLowerCase().includes(focusedValue.toLowerCase()))
+        .filter(choice => choice.toLowerCase().includes(searchLower))
         .slice(0, 25);
 
       await interaction.respond(
@@ -1116,13 +1145,16 @@ const valueCommand = {
       });
     }
 
-    await interaction.deferReply(); // Public reply
+    await interaction.deferReply();
 
-    const searchTerm = interaction.options.getString('item');
-    const amount = interaction.options.getInteger('amount') || 1;
+    const rawSearch = interaction.options.getString('item');
+    const amountOption = interaction.options.getInteger('amount');
+
+    // Support inline amounts like "2x angel wings" typed in the item field
+    const { amount: inlineAmount, name: searchTerm } = extractInlineAmount(rawSearch);
+    const amount = amountOption || inlineAmount || 1;
     
     try {
-      // Use fuzzy matching to find the closest item
       const allItems = await ValueItem.find({});
       const itemNames = allItems.map(i => i.itemName);
       const matchedName = fuzzyMatch(searchTerm, itemNames);
@@ -1133,14 +1165,43 @@ const valueCommand = {
         });
       }
 
+      // ── Perk level check ──────────────────────────────────────────────────────
+      // If the matched item is a perk (has +N suffix) but the user typed a base
+      // name without a level, prompt them to pick a level.
+      if (isPerkItem(matchedName)) {
+        const variants = getPerkLevelVariants(matchedName, itemNames);
+        if (variants.length > 1) {
+          // Check if the user's search already includes a level suffix like "+10" or "+0"
+          const userSpecifiedLevel = /\+\s*\d+/.test(searchTerm);
+          if (!userSpecifiedLevel) {
+            const levelList = variants
+              .sort((a, b) => {
+                const la = parseInt(a.match(/\+(\d+)/)?.[1] ?? '0');
+                const lb = parseInt(b.match(/\+(\d+)/)?.[1] ?? '0');
+                return lb - la;
+              })
+              .map(v => `\`${v}\``)
+              .join(', ');
+            return interaction.editReply({
+              embeds: [errorEmbed(
+                `**${matchedName.replace(/\s*\+\s*\d+\s*$/, '')}** is a perk with multiple levels!\n` +
+                `Please specify the level in your search.\n\n` +
+                `**Available levels:** ${levelList}`
+              )]
+            });
+          }
+        }
+      }
+
       const itemData = allItems.find(i => i.itemName === matchedName);
 
       // Determine embed color based on rarity
-      let embedColor = 0x2b2d31; // Default
+      let embedColor = 0x2b2d31;
       const rarity = itemData.rarity.toLowerCase();
       let rarityEmoji = '🔸';
       
-      if (rarity === 'legendary') { embedColor = 0xf1c40f; rarityEmoji = '🟡'; }
+      if (rarity === 'mythic')    { embedColor = 0xe74c3c; rarityEmoji = '🔴'; }
+      else if (rarity === 'legendary') { embedColor = 0xf1c40f; rarityEmoji = '🟡'; }
       else if (rarity === 'epic') { embedColor = 0x9b59b6; rarityEmoji = '🟣'; }
       else if (rarity === 'rare') { embedColor = 0x3498db; rarityEmoji = '🔵'; }
       else if (rarity === 'uncommon') { embedColor = 0x2ecc71; rarityEmoji = '🟢'; }
@@ -1161,33 +1222,22 @@ const valueCommand = {
           { name: '💰 Trade Value', value: `> 🔑 **${multiplyValueString(itemData.value, amount) || 'N/A'}**\n\u200B`, inline: false },
           { name: '💎 Tax (Gems)', value: `> **${multiplyValueString(itemData.taxGems, amount) || 'N/A'}**`, inline: true },
           { name: '🪙 Tax (Gold)', value: `> **${multiplyValueString(itemData.taxGold, amount) || 'N/A'}**`, inline: true }
-        )
+        );
         
       const baseValue = parseNumericalValue(itemData.value) * amount;
       if (baseValue > 0) {
-        // Find recommendations
         const similarItems = [];
         const upgradeItems = [];
         
         for (const item of allItems) {
           if (item.itemName === itemData.itemName) continue;
-          
           const itemVal = parseNumericalValue(item.value);
           if (itemVal <= 0) continue;
-          
-          // Similar value (± 10%)
-          if (itemVal >= baseValue * 0.9 && itemVal <= baseValue * 1.1) {
-            similarItems.push(item);
-          } 
-          // Upgrade value (+ 10% to + 40%)
-          else if (itemVal > baseValue * 1.1 && itemVal <= baseValue * 1.4) {
-            upgradeItems.push(item);
-          }
+          if (itemVal >= baseValue * 0.9 && itemVal <= baseValue * 1.1) similarItems.push(item);
+          else if (itemVal > baseValue * 1.1 && itemVal <= baseValue * 1.4) upgradeItems.push(item);
         }
         
-        // Shuffle helper
         const shuffle = (array) => array.sort(() => 0.5 - Math.random());
-        
         const selectedSimilar = shuffle(similarItems).slice(0, 2);
         const selectedUpgrade = shuffle(upgradeItems).slice(0, 1);
         
@@ -1200,7 +1250,7 @@ const valueCommand = {
         }
         
         if (recText) {
-          embed.addFields({ name: '\u200B', value: '\u200B', inline: false }); // Spacer
+          embed.addFields({ name: '\u200B', value: '\u200B', inline: false });
           embed.addFields({ name: '💡 Trade Recommendations', value: recText, inline: false });
         }
       }
@@ -1219,6 +1269,131 @@ const valueCommand = {
   },
 };
 
+// ─── /valuem — Multi-item value lookup ────────────────────────────────────────
+// Usage: /valuem items:angel wings : founders blessing +10 amount:1 : 2
+// Or simpler with just one item: /valuem items:angel wings
+const valuemCommand = {
+  data: new SlashCommandBuilder()
+    .setName('valuem')
+    .setDescription('Get values for multiple items at once')
+    .addStringOption(opt =>
+      opt.setName('items')
+        .setDescription('Items separated by " : " — e.g. "angel wings : founders blessing +10"')
+        .setRequired(true)
+        .setAutocomplete(false)
+    )
+    .addStringOption(opt =>
+      opt.setName('amounts')
+        .setDescription('Amounts for each item separated by " : " — e.g. "1 : 2" (omit for all x1)')
+        .setRequired(false)
+    ),
+
+  async execute(interaction) {
+    const valueListChannelId = process.env.VALUE_LIST_CHANNEL;
+    if (valueListChannelId && interaction.channel && interaction.channel.id !== valueListChannelId) {
+      return interaction.reply({
+        embeds: [errorEmbed('This command can only be used in the **#value-list** channel.')],
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    await interaction.deferReply();
+
+    const itemsRaw = interaction.options.getString('items');
+    const amountsRaw = interaction.options.getString('amounts') || '';
+
+    // Split on " : " (with spaces) or plain ":" as separator
+    const itemParts = itemsRaw.split(/\s*:\s*/).map(s => s.trim()).filter(Boolean);
+    const amountParts = amountsRaw.split(/\s*:\s*/).map(s => s.trim()).filter(Boolean);
+
+    if (itemParts.length === 0) {
+      return interaction.editReply({ embeds: [errorEmbed('Please provide at least one item name.')] });
+    }
+    if (itemParts.length > 10) {
+      return interaction.editReply({ embeds: [errorEmbed('You can look up a maximum of **10 items** at once.')] });
+    }
+
+    try {
+      const allItems = await ValueItem.find({});
+      const itemNames = allItems.map(i => i.itemName);
+
+      const results = [];
+      const errors = [];
+
+      for (let idx = 0; idx < itemParts.length; idx++) {
+        const rawEntry = itemParts[idx];
+        // Support inline amount like "2x angel wings" within the items string too
+        const { amount: inlineAmt, name: searchName } = extractInlineAmount(rawEntry);
+        const amount = (amountParts[idx] ? parseFloat(amountParts[idx]) : null) || inlineAmt || 1;
+
+        const matchedName = fuzzyMatch(searchName, itemNames);
+        if (!matchedName) {
+          errors.push(`❌ Could not find: **${searchName}**`);
+          continue;
+        }
+
+        // Perk level check
+        if (isPerkItem(matchedName)) {
+          const variants = getPerkLevelVariants(matchedName, itemNames);
+          if (variants.length > 1 && !/\+\s*\d+/.test(searchName)) {
+            const levelList = variants
+              .sort((a, b) => {
+                const la = parseInt(a.match(/\+(\d+)/)?.[1] ?? '0');
+                const lb = parseInt(b.match(/\+(\d+)/)?.[1] ?? '0');
+                return lb - la;
+              })
+              .map(v => `\`${v}\``).join(', ');
+            errors.push(
+              `⚠️ **${matchedName.replace(/\s*\+\s*\d+\s*$/, '')}** is a perk — specify level: ${levelList}`
+            );
+            continue;
+          }
+        }
+
+        const itemData = allItems.find(i => i.itemName === matchedName);
+        const label = amount > 1 ? `${amount}x ${itemData.itemName}` : itemData.itemName;
+        const tradeVal = multiplyValueString(itemData.value, amount);
+        const taxGems  = multiplyValueString(itemData.taxGems, amount);
+        const taxGold  = multiplyValueString(itemData.taxGold, amount);
+
+        let rarityEmoji = '🔸';
+        const r = itemData.rarity.toLowerCase();
+        if (r === 'mythic')    rarityEmoji = '🔴';
+        else if (r === 'legendary') rarityEmoji = '🟡';
+        else if (r === 'epic') rarityEmoji = '🟣';
+        else if (r === 'rare') rarityEmoji = '🔵';
+        else if (r === 'uncommon') rarityEmoji = '🟢';
+        else if (r === 'common') rarityEmoji = '⚪';
+
+        results.push(
+          `**${label}** ${rarityEmoji}\n` +
+          `> 🔑 **${tradeVal || 'N/A'}**  |  💎 ${taxGems || 'N/A'}  |  🪙 ${taxGold || 'N/A'}`
+        );
+      }
+
+      if (results.length === 0 && errors.length > 0) {
+        return interaction.editReply({ embeds: [errorEmbed(errors.join('\n'))] });
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle('📊 Multi-Item Trade Values')
+        .setDescription(
+          (results.length > 0 ? results.join('\n\n') : '') +
+          (errors.length > 0 ? `\n\n${errors.join('\n')}` : '')
+        )
+        .setFooter({ text: 'Data sourced from AOT:R Value List', iconURL: interaction.client.user.displayAvatarURL() })
+        .setTimestamp();
+
+      await interaction.editReply({ embeds: [embed] });
+
+    } catch (err) {
+      console.error(err);
+      await interaction.editReply({ embeds: [errorEmbed('Failed to fetch data. Please try again later.')] });
+    }
+  },
+};
+
 // ─── /tradecalc — AOT:R Trade Calculator ───────────────────────────────────────
 const tradeCalcCommand = {
   data: new SlashCommandBuilder()
@@ -1226,13 +1401,13 @@ const tradeCalcCommand = {
     .setDescription('Calculate and compare trade values')
     .addStringOption(opt =>
       opt.setName('offer')
-        .setDescription('Your offer (e.g. 2x colossal serum, 1x fritz)')
+        .setDescription('Your offer — e.g. "2x colossal serum, founders blessing +10"')
         .setRequired(true)
         .setAutocomplete(true)
     )
     .addStringOption(opt =>
       opt.setName('request')
-        .setDescription('What you want (e.g. 1x black flash aura)')
+        .setDescription('What you want — e.g. "1x black flash aura, kengo +0"')
         .setRequired(true)
         .setAutocomplete(true)
     ),
@@ -1245,27 +1420,28 @@ const tradeCalcCommand = {
       const allItems = await ValueItem.find({});
       const itemNames = allItems.map(i => i.itemName);
       
+      // Split on comma to support multi-item strings like "2x serum, angel"
       const parts = focusedValue.split(',');
       const lastPart = parts[parts.length - 1];
-      const match = lastPart.match(/^(\\s*\\d+(?:\\.\\d+)?\\s*x?\\s+)(.*)$/i);
-      
+
+      // Detect inline amount prefix at the start of the last part: "2x " or "2 "
+      const amountMatch = lastPart.match(/^(\s*\d+(?:\.\d+)?\s*x?\s+)(.*)$/i);
       let prefix = '';
-      let searchTerm = lastPart;
+      let searchTerm = lastPart.trim();
       
-      if (match) {
-        prefix = match[1];
-        searchTerm = match[2];
+      if (amountMatch) {
+        prefix = amountMatch[1];
+        searchTerm = amountMatch[2].trim();
       }
       
-      const cleanTerm = searchTerm.toLowerCase().trim();
-      if (!cleanTerm) return await interaction.respond([]);
-      
+      if (!searchTerm) return await interaction.respond([]);
+
       const filtered = itemNames
-        .filter(choice => choice.toLowerCase().includes(cleanTerm))
+        .filter(choice => choice.toLowerCase().includes(searchTerm.toLowerCase()))
         .slice(0, 25);
         
       const baseString = parts.slice(0, -1).join(',');
-      const comma = baseString ? ',' : '';
+      const comma = baseString ? ', ' : '';
         
       await interaction.respond(
         filtered.map(choice => {
@@ -1292,6 +1468,51 @@ const tradeCalcCommand = {
 
     const offerStr = interaction.options.getString('offer');
     const requestStr = interaction.options.getString('request');
+
+    // ── Perk-level pre-check for tradecalc ────────────────────────────────────
+    // Warn the user if any perk in offer/request is missing its level suffix.
+    try {
+      const allItems = await ValueItem.find({});
+      const itemNames = allItems.map(i => i.itemName);
+
+      const checkSideForPerkErrors = (inputStr) => {
+        const parts = inputStr.split(',').map(s => s.trim()).filter(Boolean);
+        const perkErrors = [];
+        for (const part of parts) {
+          const { name: itemName } = extractInlineAmount(part);
+          // strip leading amount without prefix helper
+          const cleanName = itemName.replace(/^\d+(?:\.\d+)?\s*x?\s+/i, '').trim();
+          const matched = fuzzyMatch(cleanName, itemNames);
+          if (!matched) continue;
+          if (isPerkItem(matched)) {
+            const variants = getPerkLevelVariants(matched, itemNames);
+            if (variants.length > 1 && !/\+\s*\d+/.test(cleanName)) {
+              const levelList = variants
+                .sort((a, b) => {
+                  const la = parseInt(a.match(/\+(\d+)/)?.[1] ?? '0');
+                  const lb = parseInt(b.match(/\+(\d+)/)?.[1] ?? '0');
+                  return lb - la;
+                })
+                .map(v => `\`${v}\``).join(', ');
+              perkErrors.push(
+                `⚠️ **${matched.replace(/\s*\+\s*\d+\s*$/, '')}** is a perk — please specify a level.\nAvailable: ${levelList}`
+              );
+            }
+          }
+        }
+        return perkErrors;
+      };
+
+      const offerPerkErrors  = checkSideForPerkErrors(offerStr);
+      const requestPerkErrors = checkSideForPerkErrors(requestStr);
+      const allPerkErrors = [...offerPerkErrors, ...requestPerkErrors];
+
+      if (allPerkErrors.length > 0) {
+        return interaction.editReply({
+          embeds: [errorEmbed(`**Perk level required!**\n\n${allPerkErrors.join('\n\n')}`)]
+        });
+      }
+    } catch (_) { /* If pre-check fails, let calculateSide handle it */ }
 
     try {
       const offerSide = await calculateSide(offerStr);
@@ -1400,6 +1621,7 @@ const whisperCommand = {
 
 module.exports = [
   valueCommand,
+  valuemCommand,
   tradeCalcCommand,
   queueCommand,
   myPositionCommand,
