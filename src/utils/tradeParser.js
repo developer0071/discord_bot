@@ -42,7 +42,7 @@ function parseInputString(input) {
 
 function fuzzyMatch(query, itemNames) {
   query = query.toLowerCase().trim();
-  const cleanQuery = query.replace(/[^a-z0-9\\s]/gi, '');
+  const cleanQuery = query.replace(/[^a-z0-9\s]/gi, '');
   
   const exact = itemNames.find(n => n.toLowerCase() === query);
   if (exact) return exact;
@@ -50,13 +50,13 @@ function fuzzyMatch(query, itemNames) {
   const contains = itemNames.find(n => n.toLowerCase().includes(query));
   if (contains) return contains;
 
-  const queryTokens = cleanQuery.split(/\\s+/).filter(Boolean);
+  const queryTokens = cleanQuery.split(/\s+/).filter(Boolean);
   let bestMatch = null;
   let maxScore = 0;
 
   for (const name of itemNames) {
-    const cleanName = name.toLowerCase().replace(/[^a-z0-9\\s]/gi, '');
-    const nameTokens = cleanName.split(/\\s+/).filter(Boolean);
+    const cleanName = name.toLowerCase().replace(/[^a-z0-9\s]/gi, '');
+    const nameTokens = cleanName.split(/\s+/).filter(Boolean);
     let score = 0;
     
     let allTokensMatched = true;
@@ -83,11 +83,36 @@ function fuzzyMatch(query, itemNames) {
 
   if (!bestMatch && queryTokens.length === 1 && cleanQuery.length >= 2) {
     for (const name of itemNames) {
-      const cleanName = name.toLowerCase().replace(/[^a-z0-9\\s]/gi, '');
-      const nameTokens = cleanName.split(/\\s+/).filter(Boolean);
+      const cleanName = name.toLowerCase().replace(/[^a-z0-9\s]/gi, '');
+      const nameTokens = cleanName.split(/\s+/).filter(Boolean);
       const acronym = nameTokens.map(t => t[0]).join('');
       if (acronym === cleanQuery || acronym.startsWith(cleanQuery)) {
         return name;
+      }
+    }
+  }
+
+  // ── Perk-level-aware fallback ────────────────────────────────────────────────
+  // If the query ends with "+N" (e.g. "Founder's Blessin +10") but nothing matched,
+  // try stripping the level, fuzzy-matching just the base name (catching typos),
+  // then re-attach the requested "+N" to find the right perk variant.
+  if (!bestMatch) {
+    const levelMatch = query.match(/^(.+?)\s*\+\s*(\d+)\s*$/);
+    if (levelMatch) {
+      const baseQuery = levelMatch[1].trim();
+      const levelNum  = levelMatch[2];
+      // Recurse without the +N (guards against infinite recursion: no +N in baseQuery)
+      const baseMatched = fuzzyMatch(baseQuery, itemNames);
+      if (baseMatched) {
+        const baseName   = baseMatched.replace(/\s*\+\s*\d+\s*$/, '').trim();
+        const withLevel  = `${baseName} +${levelNum}`;
+        const leveledMatch = itemNames.find(n => n.toLowerCase() === withLevel.toLowerCase());
+        if (leveledMatch) return leveledMatch;
+        // Partial level match as a last resort (e.g. +1 matches +10)
+        const partialLevel = itemNames.find(n =>
+          n.toLowerCase().startsWith(baseName.toLowerCase()) && n.includes(`+${levelNum}`)
+        );
+        if (partialLevel) return partialLevel;
       }
     }
   }
