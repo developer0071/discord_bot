@@ -1105,9 +1105,16 @@ const valueCommand = {
     )
     .addStringOption(opt =>
       opt.setName('level')
-        .setDescription('Perk level — only appears as suggestions for perk items (e.g. +0, +5, +10)')
+        .setDescription('Perk level — click to see available levels for perk items (e.g. +0, +5, +10)')
         .setRequired(false)
         .setAutocomplete(true)
+    )
+    .addIntegerOption(opt =>
+      opt.setName('amount')
+        .setDescription('Quantity multiplier for non-perk items (e.g. 2 = show value × 2)')
+        .setRequired(false)
+        .setMinValue(1)
+        .setMaxValue(100)
     ),
 
   async autocomplete(interaction) {
@@ -1180,24 +1187,28 @@ const valueCommand = {
     await interaction.deferReply();
 
     const rawSearch  = interaction.options.getString('item');
-    const levelValue = interaction.options.getString('level'); // full variant name OR raw text
+    const levelValue = interaction.options.getString('level'); // full perk variant name OR raw "+N" text
+    const amountOption = interaction.options.getInteger('amount') ?? 1;
 
-    // If level was chosen from autocomplete it IS the full variant name (e.g. "Founder's Blessing +10")
-    // If the user typed a raw number like "10" or "+10" we append it manually
+    // Build the search term:
+    // • If a perk level was selected/typed → resolve it to "ItemName +N"
+    // • Otherwise use the raw item search as-is
     let searchTerm = rawSearch.trim();
     if (levelValue) {
       if (isPerkItem(levelValue)) {
-        // Autocomplete gave us the full variant name — use it directly
+        // Autocomplete gave us the full variant name e.g. "Founder's Blessing +10" — use directly
         searchTerm = levelValue.trim();
       } else {
-        // User typed a raw number, strip existing suffix and append
+        // User typed a raw number like "10" or "+10"
         const lvlNum = levelValue.replace(/[^0-9]/g, '');
         if (lvlNum) {
           searchTerm = searchTerm.replace(/\s*\+\s*\d+\s*$/i, '').trim() + ` +${lvlNum}`;
         }
       }
     }
-    const amount = 1;
+
+    // amount multiplier only applies to non-perk items
+    const amount = levelValue ? 1 : amountOption;
     
     try {
       const allItems = await ValueItem.find({});
@@ -1252,7 +1263,9 @@ const valueCommand = {
       else if (rarity === 'uncommon') { embedColor = 0x2ecc71; rarityEmoji = '🟢'; }
       else if (rarity === 'common') { embedColor = 0x95a5a6; rarityEmoji = '⚪'; }
 
-      const title = `Trade Value: ${itemData.itemName}`;
+      const title = amount > 1
+        ? `Trade Value: ${amount}x ${itemData.itemName}`
+        : `Trade Value: ${itemData.itemName}`;
 
       const embed = new EmbedBuilder()
         .setColor(embedColor)
@@ -1260,11 +1273,11 @@ const valueCommand = {
         .setDescription(`*Current market values based on official data.*\n\u200B`)
         .addFields(
           { name: '🌟 Rarity', value: `> ${rarityEmoji} **${itemData.rarity}**\n\u200B`, inline: true },
-          { name: '🔥 Demand', value: `> **${itemData.demand || 'N/A'}**\n\u200B`, inline: true },
+          { name: '🔥 Demand', value: `> **${multiplyValueString(itemData.demand, amount) || 'N/A'}**\n\u200B`, inline: true },
           { name: '📈 Trend', value: `> **${itemData.rateOfChange || 'N/A'}**\n\u200B`, inline: true },
-          { name: '💰 Trade Value', value: `> 🔑 **${itemData.value || 'N/A'}**\n\u200B`, inline: false },
-          { name: '💎 Tax (Gems)', value: `> **${itemData.taxGems || 'N/A'}**`, inline: true },
-          { name: '🪙 Tax (Gold)', value: `> **${itemData.taxGold || 'N/A'}**`, inline: true }
+          { name: '💰 Trade Value', value: `> 🔑 **${multiplyValueString(itemData.value, amount) || 'N/A'}**\n\u200B`, inline: false },
+          { name: '💎 Tax (Gems)', value: `> **${multiplyValueString(itemData.taxGems, amount) || 'N/A'}**`, inline: true },
+          { name: '🪙 Tax (Gold)', value: `> **${multiplyValueString(itemData.taxGold, amount) || 'N/A'}**`, inline: true }
         );
         
       const baseValue = parseNumericalValue(itemData.value);
