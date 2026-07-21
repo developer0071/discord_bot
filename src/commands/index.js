@@ -1096,40 +1096,72 @@ function extractInlineAmount(str) {
 const valueCommand = {
   data: new SlashCommandBuilder()
     .setName('value')
-    .setDescription('Get the trade value of an AOT:R item (you can also type "2x item name" directly)')
+    .setDescription('Get the trade value of an AOT:R item')
     .addStringOption(opt =>
       opt.setName('item')
-        .setDescription('Item name — you can prefix with amount: "2x angel wings" or just "angel wings"')
+        .setDescription('Item name — e.g. "Founder\'s Blessing" or "Angel Wings"')
         .setRequired(true)
         .setAutocomplete(true)
     )
-    .addIntegerOption(opt =>
-      opt.setName('amount')
-        .setDescription('Multiplier (optional — you can also write "2x" in the item field instead)')
+    .addStringOption(opt =>
+      opt.setName('level')
+        .setDescription('Perk level — only appears as suggestions for perk items (e.g. +0, +5, +10)')
         .setRequired(false)
-        .setMinValue(1)
-        .setMaxValue(100)
+        .setAutocomplete(true)
     ),
 
   async autocomplete(interaction) {
-    const focusedValue = interaction.options.getFocused();
-    if (!focusedValue) return await interaction.respond([]);
+    const focused = interaction.options.getFocused(true); // { name, value }
 
     try {
       const allItems = await ValueItem.find({});
       const itemNames = allItems.map(i => i.itemName);
 
-      // Strip any inline amount prefix like "2x " before filtering
-      const { name: cleanSearch } = extractInlineAmount(focusedValue);
-      const searchLower = cleanSearch.toLowerCase();
+      // ── Autocomplete for the ITEM field ──────────────────────────────────
+      if (focused.name === 'item') {
+        const searchLower = focused.value.toLowerCase();
+        if (!searchLower) return await interaction.respond([]);
 
-      const filtered = itemNames
-        .filter(choice => choice.toLowerCase().includes(searchLower))
-        .slice(0, 25);
+        const filtered = itemNames
+          .filter(choice => choice.toLowerCase().includes(searchLower))
+          .slice(0, 25);
 
-      await interaction.respond(
-        filtered.map(choice => ({ name: choice, value: choice }))
-      );
+        return await interaction.respond(
+          filtered.map(choice => ({ name: choice, value: choice }))
+        );
+      }
+
+      // ── Autocomplete for the LEVEL field ─────────────────────────────────
+      if (focused.name === 'level') {
+        // Read whatever the user has typed/selected in the item field
+        const currentItem = interaction.options.getString('item') || '';
+        if (!currentItem) return await interaction.respond([]);
+
+        // Strip any existing +N suffix to get the base perk name
+        const baseName = currentItem.replace(/\s*\+\s*\d+\s*$/i, '').trim();
+
+        // Find all level variants for this perk in the DB
+        const variants = getPerkLevelVariants(baseName, itemNames);
+        if (variants.length === 0) return await interaction.respond([]);
+
+        // Sort levels numerically ascending (+0, +5, +10 …)
+        const sorted = variants.sort((a, b) => {
+          const la = parseInt(a.match(/\+(\d+)/)?.[1] ?? '0');
+          const lb = parseInt(b.match(/\+(\d+)/)?.[1] ?? '0');
+          return la - lb;
+        });
+
+        // Return each level as a suggestion; value is the full variant name
+        // so execute can look it up directly
+        return await interaction.respond(
+          sorted.map(v => {
+            const lvl = v.match(/\+(\d+)/)?.[1] ?? '0';
+            return { name: `+${lvl}`, value: v };
+          })
+        );
+      }
+
+      await interaction.respond([]);
     } catch (err) {
       console.error(err);
       await interaction.respond([]);
@@ -1147,12 +1179,25 @@ const valueCommand = {
 
     await interaction.deferReply();
 
-    const rawSearch = interaction.options.getString('item');
-    const amountOption = interaction.options.getInteger('amount');
+    const rawSearch  = interaction.options.getString('item');
+    const levelValue = interaction.options.getString('level'); // full variant name OR raw text
 
-    // Support inline amounts like "2x angel wings" typed in the item field
-    const { amount: inlineAmount, name: searchTerm } = extractInlineAmount(rawSearch);
-    const amount = amountOption || inlineAmount || 1;
+    // If level was chosen from autocomplete it IS the full variant name (e.g. "Founder's Blessing +10")
+    // If the user typed a raw number like "10" or "+10" we append it manually
+    let searchTerm = rawSearch.trim();
+    if (levelValue) {
+      if (isPerkItem(levelValue)) {
+        // Autocomplete gave us the full variant name — use it directly
+        searchTerm = levelValue.trim();
+      } else {
+        // User typed a raw number, strip existing suffix and append
+        const lvlNum = levelValue.replace(/[^0-9]/g, '');
+        if (lvlNum) {
+          searchTerm = searchTerm.replace(/\s*\+\s*\d+\s*$/i, '').trim() + ` +${lvlNum}`;
+        }
+      }
+    }
+    const amount = 1;
     
     try {
       const allItems = await ValueItem.find({});
@@ -1207,9 +1252,7 @@ const valueCommand = {
       else if (rarity === 'uncommon') { embedColor = 0x2ecc71; rarityEmoji = '🟢'; }
       else if (rarity === 'common') { embedColor = 0x95a5a6; rarityEmoji = '⚪'; }
 
-      const title = amount > 1 
-        ? `Trade Value: ${amount}x ${itemData.itemName}` 
-        : `Trade Value: ${itemData.itemName}`;
+      const title = `Trade Value: ${itemData.itemName}`;
 
       const embed = new EmbedBuilder()
         .setColor(embedColor)
@@ -1217,14 +1260,14 @@ const valueCommand = {
         .setDescription(`*Current market values based on official data.*\n\u200B`)
         .addFields(
           { name: '🌟 Rarity', value: `> ${rarityEmoji} **${itemData.rarity}**\n\u200B`, inline: true },
-          { name: '🔥 Demand', value: `> **${multiplyValueString(itemData.demand, amount) || 'N/A'}**\n\u200B`, inline: true },
+          { name: '🔥 Demand', value: `> **${itemData.demand || 'N/A'}**\n\u200B`, inline: true },
           { name: '📈 Trend', value: `> **${itemData.rateOfChange || 'N/A'}**\n\u200B`, inline: true },
-          { name: '💰 Trade Value', value: `> 🔑 **${multiplyValueString(itemData.value, amount) || 'N/A'}**\n\u200B`, inline: false },
-          { name: '💎 Tax (Gems)', value: `> **${multiplyValueString(itemData.taxGems, amount) || 'N/A'}**`, inline: true },
-          { name: '🪙 Tax (Gold)', value: `> **${multiplyValueString(itemData.taxGold, amount) || 'N/A'}**`, inline: true }
+          { name: '💰 Trade Value', value: `> 🔑 **${itemData.value || 'N/A'}**\n\u200B`, inline: false },
+          { name: '💎 Tax (Gems)', value: `> **${itemData.taxGems || 'N/A'}**`, inline: true },
+          { name: '🪙 Tax (Gold)', value: `> **${itemData.taxGold || 'N/A'}**`, inline: true }
         );
         
-      const baseValue = parseNumericalValue(itemData.value) * amount;
+      const baseValue = parseNumericalValue(itemData.value);
       if (baseValue > 0) {
         const similarItems = [];
         const upgradeItems = [];

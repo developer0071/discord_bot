@@ -28,22 +28,43 @@ async function syncValues(client) {
       Legendary: [], Epic: [], Rare: [], Uncommon: [], Common: []
     };
 
+    // GID for the Perks tab — needs special section-header detection
+    const PERKS_GID = '365176366';
+
     for (const gid of gids) {
       const url = `https://docs.google.com/spreadsheets/d/e/2PACX-1vR7naBmry1w8WlHFrtpxJ0n3XdgDj5cehW6XxTdJVDPMDivrnOefz83uuFCoYEGd028tjFQ6tcfPyBA/pub?gid=${gid}&single=true&output=csv`;
       const response = await axios.get(url);
       const records = parse(response.data, { columns: true, skip_empty_lines: true });
 
+      const isPerksTab = (gid === PERKS_GID);
+      let currentPerkLevel = ''; // e.g. "+10" or "+0" — only used on the Perks tab
+
       for (const row of records) {
-        if (!row.Rarity) continue; // skip headers
-        
-        const itemName = row['Item Name'];
-        // Wait, some tabs might use 'Family' as the header instead of 'Item Name' if it's the first column
-        // But the parse({columns: true}) uses the first row. The first row in Family is 'Item Name'.
-        // So row['Item Name'] should work perfectly!
-        if (!itemName) continue;
+        const rawItemName = row['Item Name'];
+        if (!rawItemName) continue;
+
+        // ── Perk section-header detection ───────────────────────────────────────
+        // The Perks tab contains rows like "PERKS +10" and "PERKS +0" that mark
+        // which upgrade level the items below belong to. These rows have no Rarity.
+        if (isPerksTab) {
+          const headerMatch = rawItemName.match(/perks?\s*(\+\s*\d+)/i);
+          if (headerMatch) {
+            // Normalise spacing: "+10" not "+ 10"
+            currentPerkLevel = ' ' + headerMatch[1].replace(/\s+/g, '');
+            continue; // this row is a header, not an item
+          }
+        }
+
+        if (!row.Rarity) continue; // skip any other non-item rows
+
+        // Append perk level suffix so both "+10" and "+0" variants are stored
+        // as unique entries, e.g. "Founder's Blessing +10" / "Founder's Blessing +0"
+        const itemName = isPerksTab && currentPerkLevel
+          ? `${rawItemName}${currentPerkLevel}`
+          : rawItemName;
 
         const rarity = row['Rarity'];
-        
+
         itemsToSave.push({
           updateOne: {
             filter: { itemName: itemName },
